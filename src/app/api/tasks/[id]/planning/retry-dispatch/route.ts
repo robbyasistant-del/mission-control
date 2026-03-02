@@ -70,14 +70,19 @@ export async function POST(
           WHERE id = ?
         `, [taskId]);
       } else {
-        // Store the error for display, keep as 'pending_dispatch'
+        // Reset to planning so user can re-plan - clears stale planning data
         run(`
-          UPDATE tasks 
-          SET planning_dispatch_error = ?,
-              status = 'pending_dispatch',
+          UPDATE tasks
+          SET status = 'planning',
+              status_reason = ?,
+              planning_complete = 0,
+              planning_spec = NULL,
+              planning_agents = NULL,
+              planning_messages = NULL,
+              planning_dispatch_error = ?,
               updated_at = datetime('now')
           WHERE id = ?
-        `, [result.error, taskId]);
+        `, ['Dispatch retry failed: ' + result.error, result.error, taskId]);
       }
     });
 
@@ -98,13 +103,19 @@ export async function POST(
     console.error('Failed to retry dispatch:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    // Store the error in the database for user display
+    // Reset to planning so user can re-plan - clears stale planning data
     run(`
-      UPDATE tasks 
-      SET planning_dispatch_error = ?,
+      UPDATE tasks
+      SET status = 'planning',
+          status_reason = ?,
+          planning_complete = 0,
+          planning_spec = NULL,
+          planning_agents = NULL,
+          planning_messages = NULL,
+          planning_dispatch_error = ?,
           updated_at = datetime('now')
       WHERE id = ?
-    `, [`Retry error: ${errorMessage}`, taskId]);
+    `, [`Retry error: ${errorMessage}`, `Retry error: ${errorMessage}`, taskId]);
 
     return NextResponse.json({ 
       error: 'Failed to retry dispatch', 

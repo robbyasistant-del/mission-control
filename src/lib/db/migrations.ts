@@ -202,6 +202,20 @@ const migrations: Migration[] = [
         console.log('[Migration 007] Added gateway_agent_id to agents');
       }
     }
+  },
+  {
+    id: '008',
+    name: 'add_status_reason_column',
+    up: (db) => {
+      console.log('[Migration 008] Adding status_reason column to tasks...');
+
+      const tasksInfo = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+
+      if (!tasksInfo.some(col => col.name === 'status_reason')) {
+        db.exec(`ALTER TABLE tasks ADD COLUMN status_reason TEXT`);
+        console.log('[Migration 008] Added status_reason to tasks');
+      }
+    }
   }
 ];
 

@@ -138,16 +138,27 @@ async function handlePlanningCompletion(taskId: string, parsed: any, messages: a
     }
   }
 
-  // Final transaction: mark as complete or store error for retry
+  // Final transaction: mark as complete or reset to planning on failure
   db.transaction(() => {
     if (dispatchError) {
-      // Store the error but don't mark as complete - user can retry
+      // Reset to planning so user can re-plan - clears stale planning data
       db.prepare(`
         UPDATE tasks
-        SET planning_dispatch_error = ?,
+        SET status = 'planning',
+            status_reason = ?,
+            planning_complete = 0,
+            planning_spec = NULL,
+            planning_agents = NULL,
+            planning_messages = NULL,
+            planning_dispatch_error = ?,
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(dispatchError, taskId);
+      `).run(
+        'Dispatch failed: ' + dispatchError,
+        dispatchError,
+        taskId
+      );
+      console.log(`[Planning Poll] Dispatch failed, reset task ${taskId} to planning: ${dispatchError}`);
     } else if (firstAgentId) {
       // Success - mark complete and assign
       db.prepare(`
