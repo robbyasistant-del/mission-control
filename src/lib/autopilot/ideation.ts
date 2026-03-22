@@ -5,6 +5,7 @@ import { recordCostEvent } from '@/lib/costs/tracker';
 import { emitAutopilotActivity } from './activity';
 import { completeJSON } from './llm';
 import { batchCheckSimilarity, storeEmbedding, checkSimilarity } from './similarity';
+import { getResearchPrograms } from './ab-testing';
 import type { Product, Idea, ResearchCycle, SwipeHistoryEntry } from '@/lib/types';
 
 function buildIdeationPrompt(
@@ -62,6 +63,7 @@ Respond with ONLY a JSON array of idea objects. No markdown, no code blocks, no 
 /**
  * Run an ideation cycle. Returns the ideation cycle ID immediately.
  * Uses the Gateway's /v1/chat/completions endpoint for stateless prompt→response.
+ * When an A/B test is active, runs ideation for each variant and tags ideas accordingly.
  */
 export async function runIdeationCycle(productId: string, cycleId?: string, existingIdeationId?: string): Promise<string> {
   const product = queryOne<Product>('SELECT * FROM products WHERE id = ?', [productId]);
@@ -94,6 +96,10 @@ export async function runIdeationCycle(productId: string, cycleId?: string, exis
   const ideationId = existingIdeationId || uuidv4();
   const now = new Date().toISOString();
 
+  // Get A/B variant programs
+  const programs = getResearchPrograms(productId);
+  const isABTest = programs.some(p => p.variantId !== null);
+
   // Phase: init — create ideation_cycles row
   if (!existingIdeationId) {
     run(
@@ -106,7 +112,7 @@ export async function runIdeationCycle(productId: string, cycleId?: string, exis
   emitAutopilotActivity({
     productId, cycleId: ideationId, cycleType: 'ideation',
     eventType: 'phase_init',
-    message: 'Ideation cycle started',
+    message: isABTest ? `Ideation cycle started (A/B test: ${programs.length} variant(s))` : 'Ideation cycle started',
     detail: `Product: ${product.name}`,
   });
   broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'init' } });
@@ -114,74 +120,101 @@ export async function runIdeationCycle(productId: string, cycleId?: string, exis
   // Run async
   (async () => {
     try {
-      const prompt = buildIdeationPrompt(product, researchReport, swipeHistory, prefModel?.learned_preferences_md);
+      let totalIdeasCount = 0;
+      let totalTokensUsed = 0;
 
-      // Phase: llm_submitted
-      run(
-        `UPDATE ideation_cycles SET current_phase = 'llm_submitted', last_heartbeat = ? WHERE id = ?`,
-        [new Date().toISOString(), ideationId]
-      );
-      emitAutopilotActivity({
-        productId, cycleId: ideationId, cycleType: 'ideation',
-        eventType: 'phase_llm_submitted',
-        message: 'Sending ideation prompt to LLM...',
-      });
-      broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'llm_submitted' } });
+      for (const programEntry of programs) {
+        const effectiveProduct = { ...product, product_program: programEntry.program };
+        const variantLabel = programEntry.variantName ? ` [${programEntry.variantName}]` : '';
 
-      // Phase: llm_polling (actually waiting for HTTP response)
-      run(
-        `UPDATE ideation_cycles SET current_phase = 'llm_polling', last_heartbeat = ? WHERE id = ?`,
-        [new Date().toISOString(), ideationId]
-      );
-      emitAutopilotActivity({
-        productId, cycleId: ideationId, cycleType: 'ideation',
-        eventType: 'phase_llm_polling',
-        message: 'Waiting for ideation agent response...',
-      });
-      broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'llm_polling' } });
+        // If the research report is a multi-variant report, extract the right sub-report
+        let effectiveResearchReport = researchReport;
+        if (researchReport && programEntry.variantId) {
+          try {
+            const parsed = JSON.parse(researchReport);
+            if (parsed.variants && Array.isArray(parsed.variants)) {
+              const variantReport = parsed.variants.find((v: { variantId: string }) => v.variantId === programEntry.variantId);
+              if (variantReport) {
+                effectiveResearchReport = JSON.stringify(variantReport.report);
+              }
+            }
+          } catch {
+            // Use full report as fallback
+          }
+        }
 
-      const { data: rawIdeas, model: responseModel, usage } = await completeJSON<unknown[]>(prompt, {
-        systemPrompt: 'You are a product ideation agent. Respond with a JSON array of idea objects only.',
-        timeoutMs: 300_000,
-      });
+        const prompt = buildIdeationPrompt(effectiveProduct, effectiveResearchReport, swipeHistory, prefModel?.learned_preferences_md);
 
-      // Normalize: handle { ideas: [...] } wrapper
-      let ideasData: unknown[];
-      if (Array.isArray(rawIdeas)) {
-        ideasData = rawIdeas;
-      } else if (rawIdeas && typeof rawIdeas === 'object' && 'ideas' in (rawIdeas as Record<string, unknown>)) {
-        ideasData = (rawIdeas as Record<string, unknown>).ideas as unknown[];
-      } else {
-        throw new Error('Ideation response was not an array of ideas');
+        // Phase: llm_submitted
+        run(
+          `UPDATE ideation_cycles SET current_phase = 'llm_submitted', last_heartbeat = ? WHERE id = ?`,
+          [new Date().toISOString(), ideationId]
+        );
+        emitAutopilotActivity({
+          productId, cycleId: ideationId, cycleType: 'ideation',
+          eventType: 'phase_llm_submitted',
+          message: `Sending ideation prompt to LLM${variantLabel}...`,
+        });
+        broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'llm_submitted' } });
+
+        // Phase: llm_polling
+        run(
+          `UPDATE ideation_cycles SET current_phase = 'llm_polling', last_heartbeat = ? WHERE id = ?`,
+          [new Date().toISOString(), ideationId]
+        );
+        emitAutopilotActivity({
+          productId, cycleId: ideationId, cycleType: 'ideation',
+          eventType: 'phase_llm_polling',
+          message: `Waiting for ideation agent response${variantLabel}...`,
+        });
+        broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'llm_polling' } });
+
+        const { data: rawIdeas, model: responseModel, usage } = await completeJSON<unknown[]>(prompt, {
+          systemPrompt: 'You are a product ideation agent. Respond with a JSON array of idea objects only.',
+          timeoutMs: 300_000,
+        });
+
+        // Normalize: handle { ideas: [...] } wrapper
+        let ideasData: unknown[];
+        if (Array.isArray(rawIdeas)) {
+          ideasData = rawIdeas;
+        } else if (rawIdeas && typeof rawIdeas === 'object' && 'ideas' in (rawIdeas as Record<string, unknown>)) {
+          ideasData = (rawIdeas as Record<string, unknown>).ideas as unknown[];
+        } else {
+          throw new Error(`Ideation response was not an array of ideas${variantLabel}`);
+        }
+
+        if (ideasData.length === 0) {
+          throw new Error(`Ideation cycle returned 0 ideas${variantLabel}`);
+        }
+
+        // Phase: ideas_parsed
+        run(
+          `UPDATE ideation_cycles SET current_phase = 'ideas_parsed', phase_data = ?, last_heartbeat = ? WHERE id = ?`,
+          [JSON.stringify({ ideas: ideasData, variantId: programEntry.variantId }), new Date().toISOString(), ideationId]
+        );
+        emitAutopilotActivity({
+          productId, cycleId: ideationId, cycleType: 'ideation',
+          eventType: 'phase_ideas_parsed',
+          message: `Parsed ${ideasData.length} ideas from LLM response${variantLabel}`,
+          detail: `Tokens used: ${usage.totalTokens}`,
+          tokensUsed: usage.totalTokens,
+        });
+        broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'ideas_parsed', count: ideasData.length } });
+
+        // Store ideas with variant_id
+        await storeIdeasFromPhaseData(ideationId, productId, cycleId || null, ideasData, {
+          model: responseModel,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
+        }, programEntry.variantId || undefined);
+
+        totalIdeasCount += ideasData.length;
+        totalTokensUsed += usage.totalTokens;
       }
 
-      if (ideasData.length === 0) {
-        throw new Error('Ideation cycle returned 0 ideas');
-      }
-
-      // Phase: ideas_parsed
-      run(
-        `UPDATE ideation_cycles SET current_phase = 'ideas_parsed', phase_data = ?, last_heartbeat = ? WHERE id = ?`,
-        [JSON.stringify({ ideas: ideasData }), new Date().toISOString(), ideationId]
-      );
-      emitAutopilotActivity({
-        productId, cycleId: ideationId, cycleType: 'ideation',
-        eventType: 'phase_ideas_parsed',
-        message: `Parsed ${ideasData.length} ideas from LLM response`,
-        detail: `Tokens used: ${usage.totalTokens}`,
-        tokensUsed: usage.totalTokens,
-      });
-      broadcast({ type: 'ideation_phase', payload: { productId, ideationId, phase: 'ideas_parsed', count: ideasData.length } });
-
-      // Phase: ideas_stored — insert into ideas table
-      await storeIdeasFromPhaseData(ideationId, productId, cycleId || null, ideasData, {
-        model: responseModel,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
-        totalTokens: usage.totalTokens,
-      });
-
-      console.log(`[Ideation] Cycle ${ideationId} completed: ${ideasData.length} ideas (tokens: ${usage.totalTokens})`);
+      console.log(`[Ideation] Cycle ${ideationId} completed: ${totalIdeasCount} ideas (tokens: ${totalTokensUsed})`);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       run(
@@ -203,13 +236,15 @@ export async function runIdeationCycle(productId: string, cycleId?: string, exis
 
 /**
  * Store ideas from parsed phase data. Used by both normal flow and recovery.
+ * When variantId is provided, ideas are tagged with the variant they came from.
  */
 export async function storeIdeasFromPhaseData(
   ideationId: string,
   productId: string,
   researchCycleId: string | null,
   ideasData: unknown[],
-  llmUsage?: { model: string; promptTokens: number; completionTokens: number; totalTokens: number }
+  llmUsage?: { model: string; promptTokens: number; completionTokens: number; totalTokens: number },
+  variantId?: string
 ): Promise<void> {
   const product = queryOne<Product>('SELECT * FROM products WHERE id = ?', [productId]);
 
@@ -278,6 +313,7 @@ export async function storeIdeasFromPhaseData(
 
     run(
       `INSERT INTO ideas (id, product_id, cycle_id, title, description, category, research_backing, impact_score, feasibility_score, complexity, estimated_effort_hours, competitive_analysis, target_user_segment, revenue_potential, technical_approach, risks, tags, source, source_research, similarity_flag, created_at, updated_at)
+      `INSERT INTO ideas (id, product_id, cycle_id, title, description, category, research_backing, impact_score, feasibility_score, complexity, estimated_effort_hours, competitive_analysis, target_user_segment, revenue_potential, technical_approach, risks, tags, source, source_research, variant_id, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'research', ?, ?, ?, ?)`,
       [
         id, productId, researchCycleId || null,
@@ -297,6 +333,7 @@ export async function storeIdeasFromPhaseData(
         Array.isArray(idea.tags) ? JSON.stringify(idea.tags) : null,
         idea.source_research ? JSON.stringify(idea.source_research) : null,
         simResult?.similarityFlag || null,
+        variantId || null,
         now, now
       ]
     );

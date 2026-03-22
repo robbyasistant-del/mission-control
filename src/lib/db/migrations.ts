@@ -1502,6 +1502,51 @@ const migrations: Migration[] = [
 
       console.log('[Migration 026] Rollback history table created');
     }
+  },
+  {
+    id: '027',
+    name: 'add_product_program_ab_testing',
+    up: (db) => {
+      console.log('[Migration 027] Adding Product Program A/B testing tables and columns...');
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS product_program_variants (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          content TEXT NOT NULL,
+          is_control INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ppv_product ON product_program_variants(product_id)`);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS product_ab_tests (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          variant_a_id TEXT NOT NULL REFERENCES product_program_variants(id),
+          variant_b_id TEXT NOT NULL REFERENCES product_program_variants(id),
+          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'concluded', 'cancelled')),
+          split_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (split_mode IN ('concurrent', 'alternating')),
+          min_swipes INTEGER NOT NULL DEFAULT 50,
+          last_variant_used TEXT,
+          winner_variant_id TEXT REFERENCES product_program_variants(id),
+          created_at TEXT DEFAULT (datetime('now')),
+          concluded_at TEXT
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_ab_tests_product ON product_ab_tests(product_id, status)`);
+
+      const ideasInfo = db.prepare("PRAGMA table_info(ideas)").all() as { name: string }[];
+      if (!ideasInfo.some(col => col.name === 'variant_id')) {
+        db.exec(`ALTER TABLE ideas ADD COLUMN variant_id TEXT REFERENCES product_program_variants(id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_ideas_variant ON ideas(variant_id)`);
+        console.log('[Migration 027] Added variant_id to ideas');
+      }
+
+      console.log('[Migration 027] Product Program A/B testing tables created');
+    }
   }
 ];
 

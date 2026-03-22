@@ -428,6 +428,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   similarity_flag TEXT,
   auto_suppressed INTEGER DEFAULT 0,
   suppress_reason TEXT,
+  variant_id TEXT REFERENCES product_program_variants(id),
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -673,6 +674,29 @@ CREATE TABLE IF NOT EXISTS user_task_reads (
   last_read_at TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(user_id, task_id)
+-- Product Program variants for A/B testing
+CREATE TABLE IF NOT EXISTS product_program_variants (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_control INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Product A/B tests
+CREATE TABLE IF NOT EXISTS product_ab_tests (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  variant_a_id TEXT NOT NULL REFERENCES product_program_variants(id),
+  variant_b_id TEXT NOT NULL REFERENCES product_program_variants(id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'concluded', 'cancelled')),
+  split_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (split_mode IN ('concurrent', 'alternating')),
+  min_swipes INTEGER NOT NULL DEFAULT 50,
+  last_variant_used TEXT,
+  winner_variant_id TEXT REFERENCES product_program_variants(id),
+  created_at TEXT DEFAULT (datetime('now')),
+  concluded_at TEXT
 );
 
 -- Indexes for performance
@@ -720,6 +744,9 @@ CREATE INDEX IF NOT EXISTS idx_seo_keywords_product ON seo_keywords(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_feedback_product ON product_feedback(product_id, processed);
 CREATE INDEX IF NOT EXISTS idx_task_notes_task ON task_notes(task_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_task_notes_pending ON task_notes(task_id, status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_ppv_product ON product_program_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_ab_tests_product ON product_ab_tests(product_id, status);
+CREATE INDEX IF NOT EXISTS idx_ideas_variant ON ideas(variant_id);
 CREATE INDEX IF NOT EXISTS idx_ideation_cycles_product ON ideation_cycles(product_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_autopilot_activity_product ON autopilot_activity_log(product_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_autopilot_activity_cycle ON autopilot_activity_log(cycle_id, created_at);
