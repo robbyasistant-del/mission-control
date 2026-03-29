@@ -12,8 +12,11 @@ interface DeviceIdentity {
   privateKeyPem: string;
 }
 
-const IDENTITY_DIR = path.join(os.homedir(), '.mission-control', 'identity');
-const IDENTITY_FILE = path.join(IDENTITY_DIR, 'device.json');
+const IDENTITY_DIR = process.env.DEVICE_IDENTITY_PATH
+  ? path.dirname(process.env.DEVICE_IDENTITY_PATH)
+  : path.join(os.homedir(), '.mission-control', 'identity');
+const IDENTITY_FILE = process.env.DEVICE_IDENTITY_PATH
+  || path.join(IDENTITY_DIR, 'device.json');
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 // Base64url encoding (RFC 4648)
