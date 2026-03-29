@@ -104,26 +104,51 @@ export async function DELETE(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
     
-    // Check if workspace has tasks or agents (cannot delete)
-    const taskCount = db.prepare(
-      'SELECT COUNT(*) as count FROM tasks WHERE workspace_id = ?'
-    ).get(id) as { count: number };
-    
-    const agentCount = db.prepare(
-      'SELECT COUNT(*) as count FROM agents WHERE workspace_id = ?'
-    ).get(id) as { count: number };
-    
-    if (taskCount.count > 0 || agentCount.count > 0) {
-      return NextResponse.json({ 
-        error: 'Cannot delete workspace with existing tasks or agents',
-        taskCount: taskCount.count,
-        agentCount: agentCount.count
-      }, { status: 400 });
+    // Prevent deleting the default workspace
+    if (id === 'default') {
+      return NextResponse.json({ error: 'Cannot delete the default workspace' }, { status: 400 });
     }
-    
-    // Delete associated records that don't block deletion
+
+    // Cascade-delete all tasks in this workspace (using cleanupTaskReferences pattern)
+    const tasks = db.prepare('SELECT id FROM tasks WHERE workspace_id = ?').all(id) as { id: string }[];
+    for (const task of tasks) {
+      // Clean FK references for each task
+      db.prepare('DELETE FROM workspace_ports WHERE task_id = ?').run(task.id);
+      db.prepare('DELETE FROM workspace_merges WHERE task_id = ?').run(task.id);
+      db.prepare('DELETE FROM skill_reports WHERE task_id = ?').run(task.id);
+      db.prepare('DELETE FROM work_checkpoints WHERE task_id = ?').run(task.id);
+      db.prepare('DELETE FROM openclaw_sessions WHERE task_id = ?').run(task.id);
+      db.prepare('DELETE FROM events WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE agent_health SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE ideas SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE cost_events SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE content_inventory SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE product_skills SET created_by_task_id = NULL WHERE created_by_task_id = ?').run(task.id);
+      db.prepare('UPDATE rollback_history SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE conversations SET task_id = NULL WHERE task_id = ?').run(task.id);
+      db.prepare('UPDATE knowledge_entries SET task_id = NULL WHERE task_id = ?').run(task.id);
+      // Cascade-delete convoys owned by this task
+      const convoy = db.prepare('SELECT id FROM convoys WHERE parent_task_id = ?').get(task.id) as { id: string } | undefined;
+      if (convoy) {
+        db.prepare('DELETE FROM agent_mailbox WHERE convoy_id = ?').run(convoy.id);
+      }
+      db.prepare('DELETE FROM tasks WHERE id = ?').run(task.id);
+    }
+
+    // Cascade-delete agents in this workspace
+    const agents = db.prepare('SELECT id FROM agents WHERE workspace_id = ?').all(id) as { id: string }[];
+    for (const agent of agents) {
+      db.prepare('DELETE FROM agent_health WHERE agent_id = ?').run(agent.id);
+      db.prepare('DELETE FROM openclaw_sessions WHERE agent_id = ?').run(agent.id);
+      db.prepare('UPDATE events SET agent_id = NULL WHERE agent_id = ?').run(agent.id);
+    }
+    db.prepare('DELETE FROM agents WHERE workspace_id = ?').run(id);
+
+    // Delete associated records
     db.prepare('DELETE FROM workflow_templates WHERE workspace_id = ?').run(id);
     db.prepare('DELETE FROM knowledge_entries WHERE workspace_id = ?').run(id);
+    db.prepare('DELETE FROM cost_events WHERE workspace_id = ?').run(id);
+    db.prepare('DELETE FROM cost_caps WHERE workspace_id = ?').run(id);
     
     db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
     
