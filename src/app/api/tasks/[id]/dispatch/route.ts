@@ -12,7 +12,7 @@ import { buildCheckpointContext } from '@/lib/checkpoint';
 import { formatMailForDispatch } from '@/lib/mailbox';
 import { getPendingNotesForDispatch } from '@/lib/task-notes';
 import { createTaskWorkspace, determineIsolationStrategy } from '@/lib/workspace-isolation';
-import { ensureWorkspaceDir, readWorkspaceMemory } from '@/lib/workspace-memory';
+import { ensureWorkspaceDir, readWorkspaceMemory, getWorkspaceDir } from '@/lib/workspace-memory';
 import type { Task, Agent, Product, OpenClawSession, WorkflowStage, TaskImage } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -190,10 +190,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       urgent: '🔴'
     }[task.priority] || '⚪';
 
-    // Get project path for deliverables — with workspace isolation if needed
-    const projectsPath = getProjectsPath();
+    // Get project path for deliverables — scoped under workspace folder
     const projectDir = task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    let taskProjectDir = `${projectsPath}/${projectDir}`;
+
+    // Resolve workspace to scope task output under WORKSPACE_BASE_PATH/<slug>/
+    const workspaceRow = queryOne<{ slug: string; name: string; description?: string }>(
+      'SELECT slug, name, description FROM workspaces WHERE id = ?', [task.workspace_id]
+    );
+    let taskProjectDir: string;
+    if (workspaceRow) {
+      // Ensure workspace folder + WORKSPACE_MEMORY.md exist (idempotent)
+      try { ensureWorkspaceDir(workspaceRow.slug, { name: workspaceRow.name, description: workspaceRow.description }); } catch { /* best-effort */ }
+      taskProjectDir = `${getWorkspaceDir(workspaceRow.slug)}/${projectDir}`;
+    } else {
+      // Fallback to legacy flat path
+      const projectsPath = getProjectsPath();
+      taskProjectDir = `${projectsPath}/${projectDir}`;
+    }
     const missionControlUrl = getMissionControlUrl();
 
     // Create isolated workspace if parallel builds are possible
@@ -446,13 +459,8 @@ Violation of this rule will invalidate the entire task.
     }
 
     // Read persistent workspace memory from filesystem
-    const workspace = queryOne<{ slug: string; name: string; description?: string }>(
-      'SELECT slug, name, description FROM workspaces WHERE id = ?', [task.workspace_id]
-    );
-    if (workspace) {
-      // Ensure workspace folder + WORKSPACE_MEMORY.md exist (idempotent)
-      try { ensureWorkspaceDir(workspace.slug, { name: workspace.name, description: workspace.description }); } catch { /* best-effort */ }
-      const workspaceMemory = readWorkspaceMemory(workspace.slug);
+    if (workspaceRow) {
+      const workspaceMemory = readWorkspaceMemory(workspaceRow.slug);
       if (workspaceMemory.trim()) {
         identityParts.push(`## Workspace Memory\n${workspaceMemory}`);
       }
