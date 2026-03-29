@@ -3,9 +3,9 @@
   "version": "2.4.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo -p ${PORT:-4001}",
+    "dev": "next dev --turbo -p 4001",
     "build": "next build",
-    "start": "next start -p ${PORT:-4001}",
+    "start": "next start -p 4001",
     "lint": "next lint",
     "test": "mkdir -p .tmp && rm -f .tmp/mission-control-test.db* && NODE_ENV=test DATABASE_PATH=.tmp/mission-control-test.db tsx --test src/**/*.test.ts",
     "db:seed": "tsx src/lib/db/seed.ts",
