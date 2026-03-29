@@ -123,7 +123,7 @@ export function expandPath(path: string): string {
 export function getMissionControlUrl(): string {
   // Server-side: use env var or auto-detect
   if (typeof window === 'undefined') {
-    return process.env.MISSION_CONTROL_URL || `http://localhost:${process.env.PORT || '4000'}`;
+    return process.env.MISSION_CONTROL_URL || `http://localhost:${process.env.PORT || '4001'}`;
   }
 
   // Client-side: use config
