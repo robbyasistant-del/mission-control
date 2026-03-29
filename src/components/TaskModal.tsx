@@ -179,9 +179,13 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
           tasks: state.tasks.filter((t) => t.id !== task.id),
         }));
         onClose();
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to delete task: ${data.error || res.statusText}`);
       }
     } catch (error) {
       console.error('Failed to delete task:', error);
+      alert('Failed to delete task: network error');
     }
   };
 

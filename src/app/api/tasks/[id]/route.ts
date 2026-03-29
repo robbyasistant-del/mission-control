@@ -475,6 +475,31 @@ export async function PATCH(
   }
 }
 
+/**
+ * Clean up ALL foreign key references to a task.
+ * Must be called BEFORE deleting the task row because foreign_keys = ON.
+ * Tables with ON DELETE CASCADE are handled automatically by SQLite.
+ */
+function cleanupTaskReferences(taskId: string) {
+  // Tables with NOT NULL task_id — must DELETE rows
+  run('DELETE FROM workspace_ports WHERE task_id = ?', [taskId]);
+  run('DELETE FROM workspace_merges WHERE task_id = ?', [taskId]);
+  run('DELETE FROM skill_reports WHERE task_id = ?', [taskId]);
+  run('DELETE FROM work_checkpoints WHERE task_id = ?', [taskId]);
+  run('DELETE FROM openclaw_sessions WHERE task_id = ?', [taskId]);
+  run('DELETE FROM events WHERE task_id = ?', [taskId]);
+
+  // Tables with nullable task_id — nullify the reference
+  run('UPDATE conversations SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE knowledge_entries SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE agent_health SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE ideas SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE cost_events SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE content_inventory SET task_id = NULL WHERE task_id = ?', [taskId]);
+  run('UPDATE product_skills SET created_by_task_id = NULL WHERE created_by_task_id = ?', [taskId]);
+  run('UPDATE rollback_history SET task_id = NULL WHERE task_id = ?', [taskId]);
+}
+
 // DELETE /api/tasks/[id] - Delete a task
 export async function DELETE(
   request: NextRequest,
@@ -508,28 +533,22 @@ export async function DELETE(
     // Delete convoy and its sub-tasks if this is a convoy parent
     const convoy = queryOne<{ id: string }>('SELECT id FROM convoys WHERE parent_task_id = ?', [id]);
     if (convoy) {
-      // Delete sub-tasks first (CASCADE handles convoy_subtasks)
+      // Delete sub-tasks first — clean ALL foreign keys for each sub-task
       const subtaskIds = queryAll<{ task_id: string }>('SELECT task_id FROM convoy_subtasks WHERE convoy_id = ?', [convoy.id]);
       for (const { task_id } of subtaskIds) {
-        run('DELETE FROM work_checkpoints WHERE task_id = ?', [task_id]);
-        run('DELETE FROM openclaw_sessions WHERE task_id = ?', [task_id]);
-        run('DELETE FROM events WHERE task_id = ?', [task_id]);
+        cleanupTaskReferences(task_id);
         run('DELETE FROM tasks WHERE id = ?', [task_id]);
       }
       run('DELETE FROM agent_mailbox WHERE convoy_id = ?', [convoy.id]);
       run('DELETE FROM convoys WHERE id = ?', [convoy.id]);
     }
 
-    // Delete or nullify related records first (foreign key constraints)
-    // Note: task_activities and task_deliverables have ON DELETE CASCADE
-    run('DELETE FROM work_checkpoints WHERE task_id = ?', [id]);
-    run('DELETE FROM openclaw_sessions WHERE task_id = ?', [id]);
-    run('DELETE FROM events WHERE task_id = ?', [id]);
-    // Conversations and Knowledge reference tasks - nullify or delete
-    run('UPDATE conversations SET task_id = NULL WHERE task_id = ?', [id]);
-    run('UPDATE knowledge_entries SET task_id = NULL WHERE task_id = ?', [id]);
+    // Clean ALL foreign key references to this task
+    cleanupTaskReferences(id);
 
-    // Now delete the task (cascades to task_activities and task_deliverables)
+    // Now delete the task (cascades to task_activities, task_deliverables,
+    // planning_questions, planning_specs, task_roles, task_notes, user_task_reads,
+    // work_checkpoints via ON DELETE CASCADE)
     run('DELETE FROM tasks WHERE id = ?', [id]);
 
     // Broadcast deletion via SSE
