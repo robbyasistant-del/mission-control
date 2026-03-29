@@ -3,6 +3,43 @@ import { queryAll, run } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+function appendWorkspaceLearningToAgentsMd(workspaceId: string, entry: {
+  title: string;
+  content: string;
+  category: string;
+  confidence: number;
+  createdAt?: string;
+}) {
+  const createdAt = entry.createdAt || new Date().toISOString();
+  const summary = entry.content.length > 280 ? `${entry.content.slice(0, 277)}...` : entry.content;
+  const memoryLine = `- [${createdAt}] (${entry.category}, confidence ${entry.confidence.toFixed(2)}) **${entry.title}** — ${summary}`;
+
+  const agents = queryAll<{ id: string; agents_md: string | null }>(
+    'SELECT id, agents_md FROM agents WHERE workspace_id = ?',
+    [workspaceId]
+  );
+
+  for (const agent of agents) {
+    const existing = agent.agents_md || '# Team Roster';
+    const marker = '## Persistent Team Learnings';
+    let updated: string;
+
+    if (existing.includes(marker)) {
+      const [head, rest] = existing.split(marker);
+      const oldLines = rest
+        .split('\n')
+        .map(l => l.trimEnd())
+        .filter(l => l.trim().startsWith('- ['))
+        .slice(0, 19);
+      updated = `${head.trimEnd()}\n\n${marker}\n\n${memoryLine}\n${oldLines.join('\n')}`.trim() + '\n';
+    } else {
+      updated = `${existing.trimEnd()}\n\n${marker}\n\n${memoryLine}\n`;
+    }
+
+    run('UPDATE agents SET agents_md = ?, updated_at = ? WHERE id = ?', [updated, new Date().toISOString(), agent.id]);
+  }
+}
+
 /**
  * GET /api/workspaces/[id]/knowledge
  * Query knowledge entries for a workspace
@@ -70,16 +107,28 @@ export async function POST(
 
     const id = crypto.randomUUID();
 
+    const confidenceValue = confidence ?? 0.5;
+
     run(
       `INSERT INTO knowledge_entries (id, workspace_id, task_id, category, title, content, tags, confidence, created_by_agent_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
       [
         id, workspaceId, task_id || null, category, title, content,
         tags ? JSON.stringify(tags) : null,
-        confidence ?? 0.5,
+        confidenceValue,
         created_by_agent_id || null
       ]
     );
+
+    // High-confidence knowledge becomes persistent team memory for future sessions
+    if (confidenceValue >= 0.7) {
+      appendWorkspaceLearningToAgentsMd(workspaceId, {
+        title,
+        content,
+        category,
+        confidence: confidenceValue,
+      });
+    }
 
     return NextResponse.json({ id, message: 'Knowledge entry created' }, { status: 201 });
   } catch (error) {

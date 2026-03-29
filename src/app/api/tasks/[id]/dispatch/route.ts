@@ -430,8 +430,25 @@ Violation of this rule will invalidate the entire task.
     }
 
     const roleLabel = currentStage?.label || 'Task';
-    const taskMessage = `${priorityEmoji} **${isBuilder ? 'NEW TASK ASSIGNED' : `${roleLabel.toUpperCase()} STAGE — ${task.title}`}**
 
+    // Build agent identity context from soul_md, user_md, agents_md
+    let agentIdentitySection = '';
+    const identityParts: string[] = [];
+    if ((agent as Agent & { soul_md?: string }).soul_md) {
+      identityParts.push(`## Your Identity\n${(agent as Agent & { soul_md?: string }).soul_md}`);
+    }
+    if ((agent as Agent & { user_md?: string }).user_md) {
+      identityParts.push(`## User Context\n${(agent as Agent & { user_md?: string }).user_md}`);
+    }
+    if ((agent as Agent & { agents_md?: string }).agents_md) {
+      identityParts.push(`## Team & Learnings\n${(agent as Agent & { agents_md?: string }).agents_md}`);
+    }
+    if (identityParts.length > 0) {
+      agentIdentitySection = `\n---\n🧬 **AGENT CONTEXT (persistent across sessions)**\n${identityParts.join('\n\n')}\n---\n`;
+    }
+
+    const taskMessage = `${priorityEmoji} **${isBuilder ? 'NEW TASK ASSIGNED' : `${roleLabel.toUpperCase()} STAGE — ${task.title}`}**
+${agentIdentitySection}
 **Title:** ${task.title}
 ${task.description ? `**Description:** ${task.description}\n` : ''}
 **Priority:** ${task.priority.toUpperCase()}
