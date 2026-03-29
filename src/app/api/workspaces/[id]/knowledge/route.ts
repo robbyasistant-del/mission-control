@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryAll, run } from '@/lib/db';
+import { queryAll, run, queryOne } from '@/lib/db';
+import { appendWorkspaceMemoryEntry } from '@/lib/workspace-memory';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,6 +129,16 @@ export async function POST(
         category,
         confidence: confidenceValue,
       });
+
+      // Also persist to filesystem WORKSPACE_MEMORY.md
+      const ws = queryOne<{ slug: string }>('SELECT slug FROM workspaces WHERE id = ?', [workspaceId]);
+      if (ws) {
+        try {
+          appendWorkspaceMemoryEntry(ws.slug, { title, content, category, confidence: confidenceValue });
+        } catch (err) {
+          console.warn('[Knowledge] Failed to update WORKSPACE_MEMORY.md:', err);
+        }
+      }
     }
 
     return NextResponse.json({ id, message: 'Knowledge entry created' }, { status: 201 });

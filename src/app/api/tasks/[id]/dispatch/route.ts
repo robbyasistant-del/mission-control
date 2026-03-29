@@ -12,6 +12,7 @@ import { buildCheckpointContext } from '@/lib/checkpoint';
 import { formatMailForDispatch } from '@/lib/mailbox';
 import { getPendingNotesForDispatch } from '@/lib/task-notes';
 import { createTaskWorkspace, determineIsolationStrategy } from '@/lib/workspace-isolation';
+import { ensureWorkspaceDir, readWorkspaceMemory } from '@/lib/workspace-memory';
 import type { Task, Agent, Product, OpenClawSession, WorkflowStage, TaskImage } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -443,6 +444,20 @@ Violation of this rule will invalidate the entire task.
     if ((agent as Agent & { agents_md?: string }).agents_md) {
       identityParts.push(`## Team & Learnings\n${(agent as Agent & { agents_md?: string }).agents_md}`);
     }
+
+    // Read persistent workspace memory from filesystem
+    const workspace = queryOne<{ slug: string; name: string; description?: string }>(
+      'SELECT slug, name, description FROM workspaces WHERE id = ?', [task.workspace_id]
+    );
+    if (workspace) {
+      // Ensure workspace folder + WORKSPACE_MEMORY.md exist (idempotent)
+      try { ensureWorkspaceDir(workspace.slug, { name: workspace.name, description: workspace.description }); } catch { /* best-effort */ }
+      const workspaceMemory = readWorkspaceMemory(workspace.slug);
+      if (workspaceMemory.trim()) {
+        identityParts.push(`## Workspace Memory\n${workspaceMemory}`);
+      }
+    }
+
     if (identityParts.length > 0) {
       agentIdentitySection = `\n---\n🧬 **AGENT CONTEXT (persistent across sessions)**\n${identityParts.join('\n\n')}\n---\n`;
     }
