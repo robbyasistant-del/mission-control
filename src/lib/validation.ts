@@ -101,7 +101,7 @@ export const CreateProductSchema = z.object({
   live_url: z.string().url().optional().or(z.literal('')),
   product_program: z.string().max(50000).optional(),
   icon: z.string().max(10).optional(),
-  workspace_id: z.string().optional(),
+  workspace_id: z.string().min(1, 'Workspace is required'),
   settings: z.string().optional(),
   build_mode: z.enum(['auto_build', 'plan_first']).optional(),
   default_branch: z.string().max(200).optional(),

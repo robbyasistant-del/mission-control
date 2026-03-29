@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Check, Rocket, Search, Loader, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 type Step = 'basics' | 'program' | 'schedule' | 'done';
+
+interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  icon?: string;
+}
 
 function isValidUrl(str: string): boolean {
   try {
@@ -29,6 +36,8 @@ export default function NewProductPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -38,7 +47,23 @@ export default function NewProductPage() {
     product_program: '',
     build_mode: 'plan_first' as 'plan_first' | 'auto_build',
     default_branch: 'main',
+    workspace_id: '',
   });
+
+  // Load available workspaces on mount
+  useEffect(() => {
+    fetch('/api/workspaces')
+      .then(res => res.json())
+      .then((data: Workspace[]) => {
+        setWorkspaces(data);
+        // Pre-select first workspace if available
+        if (data.length > 0) {
+          setForm(f => f.workspace_id ? f : { ...f, workspace_id: data[0].id });
+        }
+      })
+      .catch(err => console.error('Failed to load workspaces:', err))
+      .finally(() => setWorkspacesLoading(false));
+  }, []);
 
   const handleScan = async (url: string, source: 'repo' | 'site') => {
     const setScanning = source === 'repo' ? setScanningRepo : setScanningSite;
@@ -311,15 +336,31 @@ export default function NewProductPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-mc-text mb-2">When ideas are approved</label>
-                <select
-                  value={form.build_mode}
-                  onChange={e => setForm(f => ({ ...f, build_mode: e.target.value as 'plan_first' | 'auto_build' }))}
-                  className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
-                >
-                  <option value="plan_first">Plan first — send to planning queue</option>
-                  <option value="auto_build">Auto-build — dispatch to builder immediately</option>
-                </select>
+                <label className="block text-sm font-medium text-mc-text mb-2">Workspace *</label>
+                {workspacesLoading ? (
+                  <div className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text-secondary text-sm flex items-center gap-2">
+                    <Loader className="w-4 h-4 animate-spin" /> Loading workspaces…
+                  </div>
+                ) : workspaces.length === 0 ? (
+                  <div className="w-full bg-mc-bg-tertiary border border-amber-500/30 rounded-lg px-4 py-3 text-amber-400 text-sm">
+                    No workspaces found. Create one first.
+                  </div>
+                ) : (
+                  <select
+                    value={form.workspace_id}
+                    onChange={e => setForm(f => ({ ...f, workspace_id: e.target.value }))}
+                    className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
+                  >
+                    {workspaces.map(ws => (
+                      <option key={ws.id} value={ws.id}>
+                        {ws.icon || '📁'} {ws.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-[11px] text-mc-text-secondary mt-1.5">
+                  Tasks from this product will be created in this workspace
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-mc-text mb-2">Default Branch</label>
@@ -331,6 +372,18 @@ export default function NewProductPage() {
                   placeholder="main"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-mc-text mb-2">When ideas are approved</label>
+                <select
+                  value={form.build_mode}
+                  onChange={e => setForm(f => ({ ...f, build_mode: e.target.value as 'plan_first' | 'auto_build' }))}
+                  className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
+                >
+                  <option value="plan_first">Plan first — send to planning queue</option>
+                  <option value="auto_build">Auto-build — dispatch to builder immediately</option>
+                </select>
             </div>
 
             {!form.repo_url && (
@@ -345,7 +398,7 @@ export default function NewProductPage() {
 
             <button
               onClick={handleCreate}
-              disabled={!form.name.trim() || saving}
+              disabled={!form.name.trim() || !form.workspace_id || saving}
               className="w-full min-h-11 bg-mc-accent text-white rounded-lg font-medium hover:bg-mc-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {saving ? 'Creating...' : 'Next: Product Program'}
