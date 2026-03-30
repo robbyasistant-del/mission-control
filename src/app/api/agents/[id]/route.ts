@@ -127,20 +127,29 @@ export async function DELETE(
     }
 
     // Delete or nullify related records first (foreign key constraints)
-    run('DELETE FROM openclaw_sessions WHERE agent_id = ?', [id]);
-    run('DELETE FROM events WHERE agent_id = ?', [id]);
-    run('DELETE FROM messages WHERE sender_agent_id = ?', [id]);
-    run('DELETE FROM conversation_participants WHERE agent_id = ?', [id]);
-    run('UPDATE tasks SET assigned_agent_id = NULL WHERE assigned_agent_id = ?', [id]);
-    run('UPDATE tasks SET created_by_agent_id = NULL WHERE created_by_agent_id = ?', [id]);
-    run('UPDATE task_activities SET agent_id = NULL WHERE agent_id = ?', [id]);
+    // Wrap each in try-catch so one failure doesn't stop the others
+    const errors: string[] = [];
+    
+    try { run('DELETE FROM openclaw_sessions WHERE agent_id = ?', [id]); } catch (e) { errors.push(`openclaw_sessions: ${(e as Error).message}`); }
+    try { run('DELETE FROM agent_health WHERE agent_id = ?', [id]); } catch (e) { errors.push(`agent_health: ${(e as Error).message}`); }
+    try { run('DELETE FROM agent_mailbox WHERE agent_id = ?', [id]); } catch (e) { errors.push(`agent_mailbox: ${(e as Error).message}`); }
+    try { run('DELETE FROM events WHERE agent_id = ?', [id]); } catch (e) { errors.push(`events: ${(e as Error).message}`); }
+    try { run('DELETE FROM messages WHERE sender_agent_id = ?', [id]); } catch (e) { errors.push(`messages: ${(e as Error).message}`); }
+    try { run('DELETE FROM conversation_participants WHERE agent_id = ?', [id]); } catch (e) { errors.push(`conversation_participants: ${(e as Error).message}`); }
+    try { run('UPDATE tasks SET assigned_agent_id = NULL WHERE assigned_agent_id = ?', [id]); } catch (e) { errors.push(`tasks.assigned: ${(e as Error).message}`); }
+    try { run('UPDATE tasks SET created_by_agent_id = NULL WHERE created_by_agent_id = ?', [id]); } catch (e) { errors.push(`tasks.created: ${(e as Error).message}`); }
+    try { run('UPDATE task_activities SET agent_id = NULL WHERE agent_id = ?', [id]); } catch (e) { errors.push(`task_activities: ${(e as Error).message}`); }
 
     // Now delete the agent
     run('DELETE FROM agents WHERE id = ?', [id]);
 
-    return NextResponse.json({ success: true });
+    if (errors.length > 0) {
+      console.warn(`[DELETE Agent ${id}] Some related records could not be cleaned up:`, errors);
+    }
+
+    return NextResponse.json({ success: true, warnings: errors.length > 0 ? errors : undefined });
   } catch (error) {
     console.error('Failed to delete agent:', error);
-    return NextResponse.json({ error: 'Failed to delete agent' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete agent', details: (error as Error).message }, { status: 500 });
   }
 }
