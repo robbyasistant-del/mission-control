@@ -5,7 +5,7 @@ interface GatewayAgent {
   id?: string;
   name?: string;
   label?: string;
-  model?: string;
+  model?: unknown;
 }
 
 const SYNC_INTERVAL_MS = Number(process.env.AGENT_CATALOG_SYNC_INTERVAL_MS || 60_000);
@@ -21,6 +21,40 @@ function normalizeRole(name: string): string {
   if (n.includes('senior')) return 'senior';
   if (n.includes('plan') || n.includes('orch')) return 'orchestrator';
   return 'builder';
+}
+
+function normalizeModel(model: unknown): string | null {
+  if (model == null) return null;
+  if (typeof model === 'string') return model;
+  if (typeof model === 'object') {
+    const maybe = model as { primary?: unknown };
+    if (typeof maybe.primary === 'string') return maybe.primary;
+    try {
+      return JSON.stringify(model);
+    } catch {
+      return null;
+    }
+  }
+  return String(model);
+}
+
+function normalizeModel(model: unknown): string | null {
+  if (model == null) return null;
+  if (typeof model === 'string') return model;
+  if (typeof model === 'object') {
+    const maybe = model as { primary?: unknown };
+    if (typeof maybe.primary === 'string') return maybe.primary;
+    try {
+      return JSON.stringify(model);
+    } catch {
+      return null;
+    }
+  }
+  return String(model);
+}
+
+function countPlaceholders(sql: string): number {
+  return (sql.match(/\?/g) || []).length;
 }
 
 export async function syncGatewayAgentsToCatalog(options?: { force?: boolean; reason?: string }): Promise<number> {
@@ -54,18 +88,19 @@ export async function syncGatewayAgentsToCatalog(options?: { force?: boolean; re
 
         const name = ga.name || ga.label || gatewayId;
         const role = normalizeRole(name);
+        const modelValue = normalizeModel(ga.model);
         const existingId = existingByGatewayId.get(gatewayId) || null;
 
         if (existingId) {
           run(
             `UPDATE agents SET name = ?, role = ?, model = COALESCE(?, model), source = 'gateway', updated_at = ? WHERE id = ?`,
-            [name, role, ga.model || null, ts, existingId]
+            [name, role, modelValue, ts, existingId]
           );
         } else {
           run(
             `INSERT INTO agents (id, name, role, description, avatar_emoji, is_master, workspace_id, model, source, gateway_agent_id, created_at, updated_at)
              VALUES (lower(hex(randomblob(16))), ?, ?, ?, '🔗', 0, 'default', ?, 'gateway', ?, ?, ?)`,
-            [name, role, `Auto-synced from OpenClaw (${gatewayId})`, ga.model || null, gatewayId, ts, ts]
+            [name, role, `Auto-synced from OpenClaw (${gatewayId})`, modelValue, gatewayId, ts, ts]
           );
         }
         changed += 1;
