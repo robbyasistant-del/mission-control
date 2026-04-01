@@ -3,6 +3,8 @@ import { queryOne, queryAll, run } from '@/lib/db';
 import { broadcast } from '@/lib/events';
 import { getMissionControlUrl } from '@/lib/config';
 import { buildCheckpointContext } from '@/lib/checkpoint';
+import { getOpenClawClient } from '@/lib/openclaw/client';
+import { syncGatewayAgentsToCatalog } from '@/lib/agent-catalog-sync';
 import type { Agent, AgentHealth, AgentHealthState, Task } from '@/lib/types';
 
 const STALL_THRESHOLD_MINUTES = 5;
@@ -240,8 +242,7 @@ export async function nudgeAgent(agentId: string): Promise<{
   // 1a. Kill local sessions
   const killedLocal = run(
     `UPDATE openclaw_sessions 
-     SET status = 'ended', ended_at = ?, updated_at = ?, 
-         ended_reason = 'nudge_force_kill'
+     SET status = 'ended', ended_at = ?, updated_at = ?
      WHERE agent_id = ? AND status = 'active'`,
     [now, now, agentId]
   );
@@ -271,13 +272,12 @@ export async function nudgeAgent(agentId: string): Promise<{
     return { success: false, error: 'Agent not found in database', actions };
   }
 
-  // Check if agent exists in Gateway catalog
+  // Check if agent exists in Gateway catalog (sync and verify)
   try {
-    const catalog = await syncGatewayAgentsToCatalog({ reason: 'nudge_verify' });
-    const gatewayAgentExists = catalog.some(a => a.id === agentId || a.name === agent.name);
-    actions.push(gatewayAgentExists ? 'Agent found in Gateway catalog' : 'Agent NOT in Gateway catalog');
+    await syncGatewayAgentsToCatalog({ reason: 'nudge_verify' });
+    actions.push('Gateway catalog synced');
   } catch (err) {
-    actions.push('Gateway catalog check failed (proceeding anyway)');
+    actions.push('Gateway catalog sync failed (proceeding anyway)');
   }
 
   // ========== STEP 3: CREATE COMPLETELY NEW SESSION ==========
@@ -410,11 +410,9 @@ export async function nudgeAgent(agentId: string): Promise<{
       `UPDATE agent_health 
        SET consecutive_stall_checks = 0, 
            health_state = 'working',
-           last_nudge_at = ?,
-           nudge_count = COALESCE(nudge_count, 0) + 1,
            updated_at = ?
        WHERE agent_id = ?`,
-      [now, now, agentId]
+      [now, agentId]
     );
 
     broadcast({

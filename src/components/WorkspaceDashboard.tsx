@@ -49,8 +49,8 @@ export function WorkspaceDashboard() {
               <span className="text-2xl">🦞</span>
               <div className="flex flex-col">
                 <h1 className="text-xl font-bold">Mission Control</h1>
-                <span className="text-[10px] text-mc-text-secondary/50 font-mono tracking-tight">
-                  v2.1.0-20250401
+                <span className="text-[11px] text-mc-text-secondary/60 font-mono tracking-tight">
+                  v2.1.1-20250402
                 </span>
               </div>
             </div>

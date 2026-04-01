@@ -9,12 +9,12 @@
  * - BUILD: Timestamp o hash corto
  */
 
-export const MC_VERSION = 'v2.1.0-20250401';
-export const MC_VERSION_NAME = 'Robust Nudge';
+export const MC_VERSION = 'v2.1.1-20250402';
+export const MC_VERSION_NAME = 'Auto-Nudge Recovery Fix';
 
 export function VersionBadge() {
   return (
-    <span className="text-[10px] text-mc-text-secondary/50 font-mono tracking-tight">
+    <span className="text-[11px] text-mc-text-secondary/60 font-mono tracking-tight">
       {MC_VERSION}
     </span>
   );

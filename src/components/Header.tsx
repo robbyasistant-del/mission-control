@@ -107,8 +107,8 @@ export function Header({ workspace, isPortrait = true }: HeaderProps) {
               <Zap className="w-5 h-5 text-mc-accent-cyan" />
               <div className="flex flex-col">
                 <span className="font-semibold text-mc-text uppercase tracking-wider text-sm">Mission Control</span>
-                <span className="text-[9px] text-mc-text-secondary/50 font-mono tracking-tight leading-none">
-                  v2.1.0-20250401
+                <span className="text-[11px] text-mc-text-secondary/60 font-mono tracking-tight leading-none">
+                  v2.1.1-20250402
                 </span>
               </div>
             </div>
