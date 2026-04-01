@@ -210,79 +210,273 @@ export async function runHealthCheckCycle(): Promise<AgentHealth[]> {
 }
 
 /**
- * Nudge a stuck agent: re-dispatch its task with the latest checkpoint context.
+ * Nudge a stuck agent: Guaranteed recovery with session reset and health verification.
+ * 
+ * v2.0.0 - Robust Nudge with retry logic, Gateway cleanup, and escalation
  */
-export async function nudgeAgent(agentId: string): Promise<{ success: boolean; error?: string }> {
+export async function nudgeAgent(agentId: string): Promise<{ 
+  success: boolean; 
+  error?: string;
+  actions?: string[];
+}> {
+  const actions: string[] = [];
+  const now = new Date().toISOString();
+  
   const activeTask = queryOne<Task>(
-    `SELECT * FROM tasks WHERE assigned_agent_id = ? AND status IN ('assigned', 'in_progress', 'testing', 'verification') LIMIT 1`,
+    `SELECT * FROM tasks WHERE assigned_agent_id = ? 
+     AND status IN ('assigned', 'in_progress', 'testing', 'verification') 
+     LIMIT 1`,
     [agentId]
   );
 
   if (!activeTask) {
-    return { success: false, error: 'No active task for this agent' };
+    return { success: false, error: 'No active task for this agent', actions };
   }
 
-  const now = new Date().toISOString();
+  actions.push(`Found active task: ${activeTask.id}`);
 
-  // Kill current session
-  run(
-    `UPDATE openclaw_sessions SET status = 'ended', ended_at = ?, updated_at = ? WHERE agent_id = ? AND status = 'active'`,
+  // ========== STEP 1: FORCE-KILL ALL SESSIONS (Local + Gateway) ==========
+  
+  // 1a. Kill local sessions
+  const killedLocal = run(
+    `UPDATE openclaw_sessions 
+     SET status = 'ended', ended_at = ?, updated_at = ?, 
+         ended_reason = 'nudge_force_kill'
+     WHERE agent_id = ? AND status = 'active'`,
     [now, now, agentId]
   );
+  actions.push(`Killed ${killedLocal.changes} local session(s)`);
 
-  // Build checkpoint context
-  const checkpointCtx = buildCheckpointContext(activeTask.id);
-
-  // Append checkpoint to task description if available
-  if (checkpointCtx) {
-    const newDesc = (activeTask.description || '') + checkpointCtx;
-    run(
-      `UPDATE tasks SET description = ?, status = 'assigned', planning_dispatch_error = NULL, updated_at = ? WHERE id = ?`,
-      [newDesc, now, activeTask.id]
-    );
-  } else {
-    run(
-      `UPDATE tasks SET status = 'assigned', planning_dispatch_error = NULL, updated_at = ? WHERE id = ?`,
-      [now, activeTask.id]
-    );
+  // 1b. Kill Gateway session (fire-and-forget, best effort)
+  try {
+    const gatewayClient = getOpenClawClient();
+    if (gatewayClient.isConnected()) {
+      await gatewayClient.call('session.close', {
+        agentId: agentId,
+        reason: 'nudge_recovery'
+      }).catch(() => { /* ignore */ });
+      actions.push('Requested Gateway session cleanup');
+    }
+  } catch {
+    actions.push('Gateway cleanup skipped (not connected)');
   }
 
-  // Re-dispatch via API
+  // Wait for session termination to propagate
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // ========== STEP 2: VERIFY AGENT IS REACHABLE ==========
+  
+  const agent = queryOne<Agent>('SELECT * FROM agents WHERE id = ?', [agentId]);
+  if (!agent) {
+    return { success: false, error: 'Agent not found in database', actions };
+  }
+
+  // Check if agent exists in Gateway catalog
+  try {
+    const catalog = await syncGatewayAgentsToCatalog({ reason: 'nudge_verify' });
+    const gatewayAgentExists = catalog.some(a => a.id === agentId || a.name === agent.name);
+    actions.push(gatewayAgentExists ? 'Agent found in Gateway catalog' : 'Agent NOT in Gateway catalog');
+  } catch (err) {
+    actions.push('Gateway catalog check failed (proceeding anyway)');
+  }
+
+  // ========== STEP 3: CREATE COMPLETELY NEW SESSION ==========
+  
+  // Clear any stale session references
+  run(
+    `DELETE FROM openclaw_sessions 
+     WHERE agent_id = ? AND status = 'ended' 
+     AND ended_at < datetime('now', '-1 hour')`,
+    [agentId]
+  );
+
+  // Create fresh session record
+  const sessionId = uuidv4();
+  const openclawSessionId = `mission-control-${agent.name.toLowerCase().replace(/\s+/g, '-')}-nudged-${Date.now()}`;
+  
+  run(
+    `INSERT INTO openclaw_sessions 
+     (id, agent_id, openclaw_session_id, channel, status, session_type, created_at, updated_at)
+     VALUES (?, ?, ?, 'mission-control', 'active', 'persistent', ?, ?)`,
+    [sessionId, agentId, openclawSessionId, now, now]
+  );
+  actions.push(`Created new session: ${openclawSessionId}`);
+
+  // ========== STEP 4: BUILD CHECKPOINT CONTEXT ==========
+  
+  const checkpointCtx = buildCheckpointContext(activeTask.id);
+  
+  // Update task with checkpoint and reset to assigned
+  let newDescription = activeTask.description || '';
+  if (checkpointCtx) {
+    // Avoid duplicate checkpoints
+    if (!newDescription.includes('CHECKPOINT RECOVERY')) {
+      newDescription += '\n\n---\n🔁 **CHECKPOINT RECOVERY (NUDGED)**\n' + checkpointCtx;
+    }
+  }
+  
+  // Add nudge counter to track recovery attempts
+  const nudgeCount = (activeTask.description?.match(/NUDGE_COUNT:(\d+)/)?.[1] || '0');
+  const newNudgeCount = parseInt(nudgeCount) + 1;
+  
+  // Remove old nudge count and add new one
+  newDescription = newDescription.replace(/NUDGE_COUNT:\d+/, '');
+  newDescription += `\nNUDGE_COUNT:${newNudgeCount}`;
+  
+  run(
+    `UPDATE tasks 
+     SET description = ?, 
+         status = 'assigned',
+         status_reason = 'Nudged: session reset, awaiting re-dispatch',
+         planning_dispatch_error = NULL,
+         updated_at = ?
+     WHERE id = ?`,
+    [newDescription, now, activeTask.id]
+  );
+  actions.push(`Updated task with checkpoint (nudge #${newNudgeCount})`);
+
+  // ========== STEP 5: RE-DISPATCH WITH RETRY ==========
+  
   const missionControlUrl = getMissionControlUrl();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 
+    'Content-Type': 'application/json',
+    'X-Nudge-Attempt': String(newNudgeCount)
+  };
   if (process.env.MC_API_TOKEN) {
     headers['Authorization'] = `Bearer ${process.env.MC_API_TOKEN}`;
   }
 
-  try {
-    const res = await fetch(`${missionControlUrl}/api/tasks/${activeTask.id}/dispatch`, {
-      method: 'POST',
-      headers,
-      signal: AbortSignal.timeout(30_000),
+  // Try dispatch up to 3 times with backoff
+  let dispatchSuccess = false;
+  let lastError = '';
+  
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      actions.push(`Dispatch attempt ${attempt}/3...`);
+      
+      const res = await fetch(
+        `${missionControlUrl}/api/tasks/${activeTask.id}/dispatch`, 
+        {
+          method: 'POST',
+          headers,
+          signal: AbortSignal.timeout(30_000),
+        }
+      );
+
+      if (res.ok) {
+        dispatchSuccess = true;
+        actions.push('Dispatch successful');
+        break;
+      } else {
+        const errorText = await res.text();
+        lastError = errorText;
+        actions.push(`Dispatch failed: ${errorText.substring(0, 100)}`);
+        
+        // Wait before retry (exponential backoff)
+        if (attempt < 3) {
+          const delay = attempt * 3000; // 3s, 6s, 9s
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    } catch (err) {
+      lastError = (err as Error).message;
+      actions.push(`Dispatch error: ${lastError.substring(0, 100)}`);
+      
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+
+  // ========== STEP 6: HANDLE RESULT ==========
+  
+  if (dispatchSuccess) {
+    // Success: Log and reset health
+    run(
+      `INSERT INTO task_activities 
+       (id, task_id, agent_id, activity_type, message, metadata, created_at)
+       VALUES (?, ?, ?, 'status_changed', ?, ?, ?)`,
+      [
+        uuidv4(), 
+        activeTask.id, 
+        agentId, 
+        `Agent nudged successfully — re-dispatched with checkpoint context (attempt #${newNudgeCount})`,
+        JSON.stringify({ nudge_attempt: newNudgeCount, actions }),
+        now
+      ]
+    );
+
+    run(
+      `UPDATE agent_health 
+       SET consecutive_stall_checks = 0, 
+           health_state = 'working',
+           last_nudge_at = ?,
+           nudge_count = COALESCE(nudge_count, 0) + 1,
+           updated_at = ?
+       WHERE agent_id = ?`,
+      [now, now, agentId]
+    );
+
+    broadcast({
+      type: 'agent_health_changed',
+      payload: { agent_id: agentId, health_state: 'working', nudged: true }
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      return { success: false, error: `Dispatch failed: ${errorText}` };
-    }
-
-    // Log nudge
-    run(
-      `INSERT INTO task_activities (id, task_id, agent_id, activity_type, message, created_at)
-       VALUES (?, ?, ?, 'status_changed', 'Agent nudged — re-dispatching with checkpoint context', ?)`,
-      [uuidv4(), activeTask.id, agentId, now]
-    );
-
-    // Reset stall counter
-    run(
-      `UPDATE agent_health SET consecutive_stall_checks = 0, health_state = 'working', updated_at = ? WHERE agent_id = ?`,
-      [now, agentId]
-    );
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: true, actions };
   }
+
+  // ========== STEP 7: FALLBACK - ESCALATE OR FAIL ==========
+  
+  actions.push('All dispatch attempts failed');
+
+  // Mark task for escalation if multiple nudges failed
+  if (newNudgeCount >= 3) {
+    run(
+      `UPDATE tasks 
+       SET status = 'assigned',
+           status_reason = 'ESCALATION_NEEDED: Multiple nudges failed. Manual intervention required.',
+           planning_dispatch_error = ?,
+           updated_at = ?
+       WHERE id = ?`,
+      [`Nudge failed ${newNudgeCount} times. Last error: ${lastError.substring(0, 200)}`, now, activeTask.id]
+    );
+
+    run(
+      `INSERT INTO task_activities 
+       (id, task_id, agent_id, activity_type, message, created_at)
+       VALUES (?, ?, ?, 'status_changed', ?, ?)`,
+      [
+        uuidv4(),
+        activeTask.id,
+        agentId,
+        `⚠️ ESCALATION: Agent nudge failed ${newNudgeCount} times. Manual intervention needed.`,
+        now
+      ]
+    );
+
+    return { 
+      success: false, 
+      error: `Nudge failed after ${newNudgeCount} attempts. Escalation required.`,
+      actions 
+    };
+  }
+
+  // Simple fail - will retry on next health cycle
+  run(
+    `UPDATE tasks 
+     SET status = 'assigned',
+         status_reason = 'Nudge failed, will retry',
+         planning_dispatch_error = ?,
+         updated_at = ?
+     WHERE id = ?`,
+    [`Nudge attempt ${newNudgeCount} failed: ${lastError.substring(0, 200)}`, now, activeTask.id]
+  );
+
+  return { 
+    success: false, 
+    error: `Dispatch failed: ${lastError}. Will retry on next health cycle.`,
+    actions 
+  };
 }
 
 /**

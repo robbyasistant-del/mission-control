@@ -47,7 +47,12 @@ export function WorkspaceDashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🦞</span>
-              <h1 className="text-xl font-bold">Mission Control</h1>
+              <div className="flex flex-col">
+                <h1 className="text-xl font-bold">Mission Control</h1>
+                <span className="text-[10px] text-mc-text-secondary/50 font-mono tracking-tight">
+                  v2.1.0-20250401
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Link
