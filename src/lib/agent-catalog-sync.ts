@@ -38,25 +38,6 @@ function normalizeModel(model: unknown): string | null {
   return String(model);
 }
 
-function normalizeModel(model: unknown): string | null {
-  if (model == null) return null;
-  if (typeof model === 'string') return model;
-  if (typeof model === 'object') {
-    const maybe = model as { primary?: unknown };
-    if (typeof maybe.primary === 'string') return maybe.primary;
-    try {
-      return JSON.stringify(model);
-    } catch {
-      return null;
-    }
-  }
-  return String(model);
-}
-
-function countPlaceholders(sql: string): number {
-  return (sql.match(/\?/g) || []).length;
-}
-
 export async function syncGatewayAgentsToCatalog(options?: { force?: boolean; reason?: string }): Promise<number> {
   const force = Boolean(options?.force);
   const now = Date.now();
