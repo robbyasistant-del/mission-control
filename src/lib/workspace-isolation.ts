@@ -289,8 +289,9 @@ async function createSandboxWorkspace(
   port: number
 ): Promise<WorkspaceInfo> {
   // Ensure source directory exists
-  if (!existsSync(projectDir)) {
-    mkdirSync(projectDir, { recursive: true });
+  const resolvedProjectDir = path.resolve(projectDir);
+  if (!existsSync(resolvedProjectDir)) {
+    mkdirSync(resolvedProjectDir, { recursive: true });
   }
 
   // rsync the project directory, excluding heavy/generated dirs
@@ -378,7 +379,8 @@ export async function mergeWorkspace(task: Task, options?: { force?: boolean; cr
     return { success: false, status: 'failed', mergeLog: 'No workspace to merge' };
   }
 
-  if (!existsSync(task.workspace_path)) {
+  const resolvedWorkspacePath = path.resolve(task.workspace_path);
+  if (!existsSync(resolvedWorkspacePath)) {
     return { success: false, status: 'failed', mergeLog: 'Workspace directory not found' };
   }
 
