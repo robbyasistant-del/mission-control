@@ -35,35 +35,20 @@ export default function NewAutopilotProductPage() {
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
   
-  const defaultProductProgram = `# Product Requirements Document
+  const fallbackProductProgram = `# Product Requirements Document
 
 ## Overview
-Describe what this product does and its main purpose.
 
-## Objectives
-- Objective 1: Define the primary goal
-- Objective 2: Define secondary goals
-- Objective 3: Success metrics
+## Objectives:
 
-## Features
-### Feature 1: [Name]
-- Description: Detailed explanation
-- Priority: High/Medium/Low
-- Acceptance Criteria: What defines done
+## Features:
 
-### Feature 2: [Name]
-- Description: Detailed explanation
-- Priority: High/Medium/Low
-- Acceptance Criteria: What defines done
+## Reference Urls:
 
-## Reference Urls
-- Documentation: https://...
-- Design: https://...
-- API: https://...
+## Visual References:`;
 
-## Visual References
-- Screenshots, mockups, or design links
-- Color scheme, typography, branding guidelines`;
+  const [generatingProgram, setGeneratingProgram] = useState(false);
+  const [generationSeconds, setGenerationSeconds] = useState(300);
 
   const [form, setForm] = useState({
     name: '',
@@ -73,7 +58,7 @@ Describe what this product does and its main purpose.
     source_code_path: '',
     local_deploy_path: '',
     icon: '🚀',
-    product_program: defaultProductProgram,
+    product_program: '',
     build_mode: 'plan_first' as 'plan_first' | 'auto_build',
     default_branch: 'main',
     workspace_id: '',
@@ -171,6 +156,61 @@ Describe what this product does and its main purpose.
     }
   };
 
+  const generateSuggestedProgram = async () => {
+    setGeneratingProgram(true);
+    setGenerationSeconds(300);
+    setForm(f => ({ ...f, product_program: '' }));
+
+    try {
+      const res = await fetch('/api/autopilot/products/generate-program', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+          repo_url: form.repo_url,
+          live_url: form.live_url,
+          source_code_path: form.source_code_path,
+          local_deploy_path: form.local_deploy_path,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      const suggested = typeof data?.suggestedProgram === 'string' && data.suggestedProgram.trim()
+        ? data.suggestedProgram
+        : fallbackProductProgram;
+
+      setForm(f => ({ ...f, product_program: suggested }));
+    } catch {
+      setForm(f => ({ ...f, product_program: fallbackProductProgram }));
+    } finally {
+      setGeneratingProgram(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 'program' && !form.product_program && !generatingProgram) {
+      generateSuggestedProgram();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  useEffect(() => {
+    if (!generatingProgram) return;
+    const t = setInterval(() => {
+      setGenerationSeconds((s) => {
+        if (s <= 1) {
+          clearInterval(t);
+          setGeneratingProgram(false);
+          setForm(f => ({ ...f, product_program: f.product_program?.trim() ? f.product_program : fallbackProductProgram }));
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [generatingProgram, fallbackProductProgram]);
+
   const handleSaveProgram = async () => {
     if (!productId) return;
     setSaving(true);
@@ -178,7 +218,7 @@ Describe what this product does and its main purpose.
       await fetch(`/api/autopilot/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_program: form.product_program }),
+        body: JSON.stringify({ product_program: form.product_program || fallbackProductProgram }),
       });
       setStep('done');
     } catch (error) {
@@ -389,14 +429,23 @@ Describe what this product does and its main purpose.
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-mc-text mb-2">Product Program (PRD)</label>
+              {generatingProgram && (
+                <div className="mb-3 flex items-center gap-2 text-sm text-mc-text-secondary">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span>Generating SUGGESTED Product Program via Gateway... ({generationSeconds}s)</span>
+                </div>
+              )}
               <textarea
                 value={form.product_program}
                 onChange={e => setForm(f => ({ ...f, product_program: e.target.value }))}
-                className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text focus:outline-none focus:border-mc-accent resize-none font-mono text-sm"
+                disabled={generatingProgram}
+                className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text focus:outline-none focus:border-mc-accent resize-none font-mono text-sm disabled:opacity-60"
                 rows={20}
               />
               <p className="text-xs text-mc-text-secondary mt-2">
-                Edit the template above to define your product requirements. This guides the Autopilot agent.
+                {generatingProgram
+                  ? 'Waiting for gateway response. If timeout/error happens, a basic template is unlocked automatically.'
+                  : 'Edit the suggested program and continue.'}
               </p>
             </div>
 
@@ -409,11 +458,13 @@ Describe what this product does and its main purpose.
               </button>
               <button
                 onClick={handleSaveProgram}
-                disabled={saving}
+                disabled={saving || generatingProgram}
                 className="min-h-11 flex items-center gap-2 px-6 bg-mc-accent text-mc-bg rounded-lg font-medium hover:bg-mc-accent/90 disabled:opacity-50"
               >
                 {saving ? (
                   <><Loader className="w-4 h-4 animate-spin" /> Saving...</>
+                ) : generatingProgram ? (
+                  <><Loader className="w-4 h-4 animate-spin" /> Generating...</>
                 ) : (
                   <>Save & Continue <ArrowLeft className="w-4 h-4 rotate-180" /></>
                 )}
