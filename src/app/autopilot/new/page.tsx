@@ -48,7 +48,8 @@ export default function NewAutopilotProductPage() {
 ## Visual References:`;
 
   const [generatingProgram, setGeneratingProgram] = useState(false);
-  const [generationSeconds, setGenerationSeconds] = useState(300);
+  const [generationSeconds, setGenerationSeconds] = useState(120);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -158,7 +159,8 @@ export default function NewAutopilotProductPage() {
 
   const generateSuggestedProgram = async () => {
     setGeneratingProgram(true);
-    setGenerationSeconds(300);
+    setGenerationSeconds(120);
+    setGenerationError(null);
     setForm(f => ({ ...f, product_program: '' }));
 
     try {
@@ -180,20 +182,20 @@ export default function NewAutopilotProductPage() {
         ? data.suggestedProgram
         : fallbackProductProgram;
 
+      if (data.source?.startsWith?.('fallback')) {
+        setGenerationError(data.source === 'fallback:timeout' ? 'Timeout — no response from Gateway' : 'Gateway error — using fallback');
+      }
+
       setForm(f => ({ ...f, product_program: suggested }));
     } catch {
+      setGenerationError('Connection error — using fallback');
       setForm(f => ({ ...f, product_program: fallbackProductProgram }));
     } finally {
       setGeneratingProgram(false);
     }
   };
 
-  useEffect(() => {
-    if (step === 'program' && !form.product_program && !generatingProgram) {
-      generateSuggestedProgram();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  // NOTE: Auto-generation removed — now user-initiated via "Auto-generation" button
 
   useEffect(() => {
     if (!generatingProgram) return;
@@ -201,8 +203,10 @@ export default function NewAutopilotProductPage() {
       setGenerationSeconds((s) => {
         if (s <= 1) {
           clearInterval(t);
+          // On timeout, leave the textarea empty so user can fill manually or retry
+          setGenerationError('Timeout — you can edit manually or try again');
+          setForm(f => ({ ...f, product_program: fallbackProductProgram }));
           setGeneratingProgram(false);
-          setForm(f => ({ ...f, product_program: f.product_program?.trim() ? f.product_program : fallbackProductProgram }));
           return 0;
         }
         return s - 1;
@@ -428,24 +432,49 @@ export default function NewAutopilotProductPage() {
         {step === 'program' && (
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-mc-text mb-2">Product Program (PRD)</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-mc-text">Product Program (PRD)</label>
+                <button
+                  onClick={generateSuggestedProgram}
+                  disabled={generatingProgram}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs bg-mc-bg-tertiary border border-mc-border rounded-lg text-mc-text-secondary hover:text-mc-accent hover:border-mc-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {generatingProgram ? (
+                    <><Loader className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                  ) : (
+                    <><Sparkles className="w-3.5 h-3.5" /> Auto-generation</>
+                  )}
+                </button>
+              </div>
+
               {generatingProgram && (
-                <div className="mb-3 flex items-center gap-2 text-sm text-mc-text-secondary">
-                  <Loader className="w-4 h-4 animate-spin" />
-                  <span>Generating SUGGESTED Product Program via Gateway... ({generationSeconds}s)</span>
+                <div className="mb-3 rounded-lg border border-mc-accent/30 bg-mc-accent/10 px-3 py-2 flex items-center gap-3">
+                  <Loader className="w-4 h-4 animate-spin text-mc-accent" />
+                  <div className="flex-1">
+                    <div className="text-sm text-mc-text">Generating proposal via Gateway...</div>
+                    <div className="text-xs text-mc-text-secondary">Timeout in {generationSeconds}s</div>
+                  </div>
                 </div>
               )}
+
+              {generationError && !generatingProgram && (
+                <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 flex items-center gap-2 text-sm text-yellow-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>{generationError}</span>
+                </div>
+              )}
+
               <textarea
                 value={form.product_program}
                 onChange={e => setForm(f => ({ ...f, product_program: e.target.value }))}
-                disabled={generatingProgram}
-                className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text focus:outline-none focus:border-mc-accent resize-none font-mono text-sm disabled:opacity-60"
+                placeholder={fallbackProductProgram}
+                className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text focus:outline-none focus:border-mc-accent resize-none font-mono text-sm"
                 rows={20}
               />
               <p className="text-xs text-mc-text-secondary mt-2">
                 {generatingProgram
-                  ? 'Waiting for gateway response. If timeout/error happens, a basic template is unlocked automatically.'
-                  : 'Edit the suggested program and continue.'}
+                  ? 'Waiting for Gateway response. You can still edit below if needed.'
+                  : 'Tip: Click "Auto-generation" for a quick suggested draft, or fill manually.'}
               </p>
             </div>
 
@@ -463,8 +492,6 @@ export default function NewAutopilotProductPage() {
               >
                 {saving ? (
                   <><Loader className="w-4 h-4 animate-spin" /> Saving...</>
-                ) : generatingProgram ? (
-                  <><Loader className="w-4 h-4 animate-spin" /> Generating...</>
                 ) : (
                   <>Save & Continue <ArrowLeft className="w-4 h-4 rotate-180" /></>
                 )}

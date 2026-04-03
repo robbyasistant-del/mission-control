@@ -29,25 +29,33 @@ function buildPrompt(input: {
   source_code_path?: string;
   local_deploy_path?: string;
 }) {
-  return `Crea un Product Program(PRD) con la siguiente estructura:
+  return `Create a Product Program (PRD) with this exact structure:
 # Product Requirements Document
 
 ## Overview
+(max 3 bullet points)
 
 ## Objectives:
+(max 3 bullet points)
 
 ## Features:
+(max 3 bullet points)
 
 ## Reference Urls:
+(max 3 URLs)
 
 ## Visual References:
+(max 3 references)
 
-Donde para cada parte no mas de 3 lineas, basadas en el titulo, la descripción y las urls y path basicos dados en el formulario.
-Debe ser una version muy sencilla como SUGGESTED Product Program (PRD), lista para ser editada por el usuario.
+IMPORTANT CONSTRAINTS:
+- Maximum 3 items per section (keep it extremely simple)
+- Each bullet point max 1 line
+- Use the product info below to fill content
+- This is a SUGGESTED draft for user editing
 
-Datos del producto:
-- Titulo: ${input.name || ''}
-- Descripcion: ${input.description || ''}
+Product info:
+- Name: ${input.name || ''}
+- Description: ${input.description || ''}
 - Repo URL: ${input.repo_url || ''}
 - Live URL: ${input.live_url || ''}
 - Source-code path: ${input.source_code_path || ''}
@@ -108,8 +116,8 @@ export async function POST(request: NextRequest) {
     const prompt = buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
     await client.sendMessage(sessionId, prompt);
 
-    // Wait up to 5 minutes, poll every 3s
-    const timeoutAt = Date.now() + 5 * 60 * 1000;
+    // Wait up to 2 minutes, poll every 3s
+    const timeoutAt = Date.now() + 2 * 60 * 1000;
     while (Date.now() < timeoutAt) {
       await sleep(3000);
       const history = await client.getSessionHistory(sessionId).catch(() => []);
