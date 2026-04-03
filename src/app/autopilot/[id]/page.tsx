@@ -472,8 +472,9 @@ export default function AutopilotProductPage() {
                       <textarea
                         value={additionalPrompt}
                         onChange={(e) => setAdditionalPrompt(e.target.value)}
+                        disabled={autoBuildingExecutive}
                         placeholder="Add any specific instructions or context for the executive summary generation..."
-                        className="w-full h-full min-h-[120px] bg-mc-bg-tertiary border border-mc-border rounded-lg p-3 text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                        className="w-full h-full min-h-[120px] bg-mc-bg-tertiary border border-mc-border rounded-lg p-3 text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
                       />
                     </div>
 
@@ -506,10 +507,11 @@ export default function AutopilotProductPage() {
                       value={editedExecutive}
                       onChange={(e) => setEditedExecutive(e.target.value)}
                       placeholder="# Executive Summary&#10;&#10;Write a concise executive summary covering:&#10;- Problem statement&#10;- Solution overview&#10;- Key metrics and goals&#10;- Resource requirements&#10;- Timeline highlights"
-                      className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                      disabled={autoBuildingExecutive}
+                      className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
                     />
                     <div className="flex justify-end">
-                      <button onClick={() => handleSaveStep('executive-summary')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
+                      <button onClick={() => handleSaveStep('executive-summary')} disabled={saving || autoBuildingExecutive} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
                         {saving ? 'Saving...' : 'Save Executive Summary'}
                       </button>
                     </div>

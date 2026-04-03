@@ -12,87 +12,135 @@ function ensureAutopilotColumns() {
 export const dynamic = 'force-dynamic';
 
 function buildExecutiveSummaryPrompt(productProgram: string, additionalPrompt?: string | null): string {
-  const basePrompt = `You are an expert product strategist and technical architect. Your task is to create a comprehensive Executive Summary for a product based on the provided Product Requirements Document (PRD).
+  const basePrompt = `You are an expert product strategist and technical architect. Create a comprehensive Executive Summary based on the provided Product Requirements Document (PRD).
 
 ## Product Requirements Document (PRD):
 ${productProgram}
 
-## Your Task
-Create a detailed Executive Summary following this exact structure. Research and analyze the PRD content deeply to extract strategic insights:
+## CRITICAL INSTRUCTIONS
+
+1. **NO INTRODUCTIONS OR META-COMMENTARY**: Start directly with "# Executive Summary". Do NOT include phrases like "Voy a revisar primero...", "Ahora tengo el contexto completo...", "He creado el Executive Summary...", or "El documento completo incluye...". Output ONLY the Executive Summary content.
+
+2. **NO FILE REFERENCES**: Do NOT mention file paths, saving locations, or that the document is saved anywhere. Just output the content.
+
+3. **ROADMAP MUST BE COMPREHENSIVE**: Create as many phases/sprints as necessary for the product (typically 4-8 phases). Each phase MUST include:
+   - Clear phase name indicating the focus
+   - Detailed user story with: As a [role], I want [feature], so that [benefit]
+   - Specific features and functionality being delivered
+   - Acceptance criteria or deliverables
+   - Estimated effort indication (if relevant)
+
+4. **TECH STACK MUST BE COMPLETE**: List ALL technological layers needed, including but not limited to:
+   - Frontend framework/library
+   - Backend/runtime
+   - Database(s) - primary, cache, search
+   - API layer
+   - Authentication/Authorization
+   - Infrastructure/Hosting
+   - CI/CD
+   - Monitoring/Logging
+   - Testing frameworks
+   - Any other relevant technology layers
+
+## REQUIRED OUTPUT STRUCTURE
 
 # Executive Summary
-**Document Purpose:** This executive summary provides decision-makers with the key strategic insights and recommendations from our product development roadmap. 
+**Document Purpose:** This executive summary provides decision-makers with the key strategic insights and recommendations from our product development roadmap.
 
 ## 🎯 STRATEGIC IMPERATIVES
 
 ### Why This Product Matters Now
-
-1. **Matters 1** Description 1
-2. **Matters 2** Description 2
-3. **Matters 3** Description 3
+[3-5 compelling reasons with detailed explanations]
 
 ## 📊 KEY FINDINGS
 
-### Finding 1:
-**Key Insight:**
+### Finding 1: [Title]
+**Key Insight:** [Detailed explanation]
 
-### Finding 2:
-**Key Insight:**
+### Finding 2: [Title]
+**Key Insight:** [Detailed explanation]
 
-### Finding 3:
-**Key Insight:**
+### Finding 3: [Title]
+**Key Insight:** [Detailed explanation]
 
 ### Strategic Benefits
-
-1. **benefit 1**
-2. **benefit 2**
-3. **benefit 3**
+1. **[Benefit Name]:** [Detailed description of business value]
+2. **[Benefit Name]:** [Detailed description of business value]
+3. **[Benefit Name]:** [Detailed description of business value]
 
 ## ⚠️ CRITICAL SUCCESS FACTORS
+
 ### What Will Make This Fail (Avoid These)
-1...
-2...
-3...
-4...
-5...
+1. [Specific risk with mitigation strategy]
+2. [Specific risk with mitigation strategy]
+3. [Specific risk with mitigation strategy]
+4. [Specific risk with mitigation strategy]
+5. [Specific risk with mitigation strategy]
 
 ### What Will Make This Succeed (Do These)
-1...
-2...
-3...
-4...
-5...
+1. [Specific action with implementation approach]
+2. [Specific action with implementation approach]
+3. [Specific action with implementation approach]
+4. [Specific action with implementation approach]
+5. [Specific action with implementation approach]
 
 ## 🗺️ ROADMAP OVERVIEW
-### PHASE 1: [Name]
-**PHASE 1 user story**...
+[Create as many phases as needed - typically 4-8 phases]
 
-### PHASE 2: [Name]
-**PHASE 2 user story**...
+### PHASE 1: [Descriptive Name]
+**User Story:** As a [user type], I want [capability], so that [benefit/outcome]
 
-### PHASE 3: [Name]
-**PHASE 3 user story**...
+**Features & Functionality:**
+- [Specific feature with detailed description]
+- [Specific feature with detailed description]
+- [Specific feature with detailed description]
 
-### PHASE 4: [Name]
-**PHASE 4 user story**...
+**Acceptance Criteria:**
+- [Measurable criterion]
+- [Measurable criterion]
 
-## TECHNOLOGY STACK
-**Frontend:** ...
-**Backend:** ...
-**Database:** ...
-**Infrastructure:** ...
-**AI/ML (if applicable):** ...
+**Key Deliverables:** [What is produced at end of phase]
 
-## Instructions:
-- Analyze the PRD deeply and extract strategic insights
-- Create realistic, actionable phases based on the product scope
-- Suggest appropriate technology stack based on the product requirements
-- Be specific and detailed in each section
-- Focus on business value and technical feasibility
-- Consider the URLs and paths mentioned in the PRD for context`;
+### PHASE 2: [Descriptive Name]
+[Same detailed structure as Phase 1]
+
+### PHASE 3: [Descriptive Name]
+[Same detailed structure as Phase 1]
+
+### PHASE 4: [Descriptive Name]
+[Same detailed structure as Phase 1]
+
+[Continue with additional phases as needed for the product scope]
+
+## 🛠️ TECHNOLOGY STACK
+
+**Frontend:** [Specific technologies with versions if relevant - e.g., "Next.js 14 with React 18, Tailwind CSS for styling, React Query for state management"]
+
+**Backend:** [Specific runtime/framework - e.g., "Node.js with Express, or Python with FastAPI"]
+
+**Database:** [All data stores - e.g., "PostgreSQL 15 for primary data, Redis for caching and sessions, Elasticsearch for search if needed"]
+
+**API Layer:** [e.g., "REST with OpenAPI spec, or GraphQL with Apollo Server"]
+
+**Authentication/Authorization:** [e.g., "Auth0, Firebase Auth, or custom JWT implementation"]
+
+**Infrastructure/Hosting:** [e.g., "Vercel for frontend, AWS EC2/Fargate for backend, RDS for PostgreSQL"]
+
+**CI/CD:** [e.g., "GitHub Actions for automated testing and deployment"]
+
+**Monitoring & Logging:** [e.g., "Datadog, Sentry for error tracking, CloudWatch"]
+
+**Testing:** [e.g., "Jest + React Testing Library for frontend, Pytest for backend, Playwright for E2E"]
+
+**Additional Layers:** [Any other specific technologies needed - e.g., "WebSocket for real-time features, Stripe for payments, SendGrid for email"]`;
 
   if (additionalPrompt && additionalPrompt.trim()) {
-    return `${basePrompt}\n\n## Additional Context from User:\n${additionalPrompt}\n\nUse this additional context to guide your analysis and recommendations.`;
+    return `${basePrompt}
+
+## Additional Context from User:
+${additionalPrompt.trim()}
+
+Incorporate this additional context into your analysis and recommendations.`;
   }
 
   return basePrompt;
@@ -133,13 +181,13 @@ export async function POST(
     // Generate using LLM with 5 minute timeout
     const result = await complete(prompt, {
       model: 'openclaw',
-      systemPrompt: 'You are an expert product strategist, technical architect, and business analyst. You excel at creating comprehensive executive summaries that bridge business strategy with technical implementation. You analyze product requirements deeply and provide actionable, realistic roadmaps and technology recommendations.',
+      systemPrompt: 'You are an expert product strategist and technical architect. You create comprehensive, actionable executive summaries. You NEVER include meta-commentary like "I will analyze" or "I have created". You NEVER mention saving files or paths. You output ONLY the requested document content. You always provide detailed, specific recommendations.',
       temperature: 0.7,
       maxTokens: 4096,
       timeoutMs: 300_000, // 5 minutes
     });
 
-    // Clean up the response
+    // Clean up the response aggressively
     let executiveSummary = result.content.trim();
     
     // Remove markdown code blocks if present
@@ -148,12 +196,39 @@ export async function POST(
       executiveSummary = codeBlockMatch[1].trim();
     }
 
+    // Remove common LLM intros/outros
+    const lines = executiveSummary.split('\n');
+    const cleanedLines: string[] = [];
+    let foundStart = false;
+    
+    for (const line of lines) {
+      // Skip lines before # Executive Summary
+      if (!foundStart && line.trim().startsWith('# Executive Summary')) {
+        foundStart = true;
+      }
+      if (!foundStart) continue;
+      
+      // Stop at file references or meta-commentary
+      if (line.includes('**Archivo guardado en:**') || 
+          line.includes('El documento completo incluye') ||
+          line.match(/^He creado el Executive Summary/) ||
+          line.match(/^Voy a revisar/) ||
+          line.match(/^Ahora tengo el contexto/) ||
+          line.match(/^---$/)) {
+        break;
+      }
+      
+      cleanedLines.push(line);
+    }
+    
+    executiveSummary = cleanedLines.join('\n').trim();
+
     // Ensure it starts with the expected header
     if (!executiveSummary.includes('# Executive Summary')) {
       executiveSummary = `# Executive Summary\n\n${executiveSummary}`;
     }
 
-    // Save to database
+    // Save to database only (no file system)
     updateAutopilotProduct(params.id, { 
       executive_summary: executiveSummary,
       workflow_state: 'executive'

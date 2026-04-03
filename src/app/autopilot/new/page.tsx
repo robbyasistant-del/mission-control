@@ -222,7 +222,10 @@ export default function NewAutopilotProductPage() {
       await fetch(`/api/autopilot/products/${productId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_program: form.product_program || fallbackProductProgram }),
+        body: JSON.stringify({
+          product_program: form.product_program || fallbackProductProgram,
+          workflow_state: 'program',
+        }),
       });
       setStep('done');
     } catch (error) {
