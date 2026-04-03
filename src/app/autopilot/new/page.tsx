@@ -35,6 +35,36 @@ export default function NewAutopilotProductPage() {
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
   
+  const defaultProductProgram = `# Product Requirements Document
+
+## Overview
+Describe what this product does and its main purpose.
+
+## Objectives
+- Objective 1: Define the primary goal
+- Objective 2: Define secondary goals
+- Objective 3: Success metrics
+
+## Features
+### Feature 1: [Name]
+- Description: Detailed explanation
+- Priority: High/Medium/Low
+- Acceptance Criteria: What defines done
+
+### Feature 2: [Name]
+- Description: Detailed explanation
+- Priority: High/Medium/Low
+- Acceptance Criteria: What defines done
+
+## Reference Urls
+- Documentation: https://...
+- Design: https://...
+- API: https://...
+
+## Visual References
+- Screenshots, mockups, or design links
+- Color scheme, typography, branding guidelines`;
+
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -43,7 +73,7 @@ export default function NewAutopilotProductPage() {
     source_code_path: '',
     local_deploy_path: '',
     icon: '🚀',
-    product_program: '',
+    product_program: defaultProductProgram,
     build_mode: 'plan_first' as 'plan_first' | 'auto_build',
     default_branch: 'main',
     workspace_id: '',
@@ -363,11 +393,10 @@ export default function NewAutopilotProductPage() {
                 value={form.product_program}
                 onChange={e => setForm(f => ({ ...f, product_program: e.target.value }))}
                 className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text focus:outline-none focus:border-mc-accent resize-none font-mono text-sm"
-                rows={16}
-                placeholder="# Product Requirements Document&#10;&#10;## Overview&#10;...&#10;&#10;## Features&#10;..."
+                rows={20}
               />
               <p className="text-xs text-mc-text-secondary mt-2">
-                This is the product program that guides the Autopilot agent. You can leave it empty for now and edit it later.
+                Edit the template above to define your product requirements. This guides the Autopilot agent.
               </p>
             </div>
 
