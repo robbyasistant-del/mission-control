@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { queryOne, queryAll, run, transaction } from '@/lib/db';
 import type { Agent } from '@/lib/types';
 
@@ -9,6 +11,7 @@ interface ImportAgentRequest {
   name: string;
   model?: string;
   workspace_id?: string;
+  gateway_workspace_path?: string;
 }
 
 interface ImportRequest {
@@ -64,36 +67,46 @@ export async function POST(request: NextRequest) {
         const id = uuidv4();
         const workspaceId = agentReq.workspace_id || 'default';
 
-        // Generate default identity files referencing the gateway agent.
-        // The gateway does not expose SOUL.md/USER.md/AGENTS.md via its API,
-        // so we populate sensible defaults that prompt the user to paste their
-        // existing content from the OpenClaw workspace.
-        const soulMd = [
+        const defaultSoulMd = [
           `# ${agentReq.name}`,
           '',
           `Imported from OpenClaw Gateway (agent: ${agentReq.gateway_agent_id}).`,
           '',
           'Configure this agent\'s personality, values, and communication style here.',
-          'If this agent has a SOUL.md in your OpenClaw workspace, paste its contents here.',
         ].join('\n');
 
-        const userMd = [
+        const defaultUserMd = [
           '# User Context',
           '',
           `Imported from OpenClaw Gateway (agent: ${agentReq.gateway_agent_id}).`,
           '',
           'Add context about the human this agent works with.',
-          'If this agent has a USER.md in your OpenClaw workspace, paste its contents here.',
         ].join('\n');
 
-        const agentsMd = [
+        const defaultAgentsMd = [
           '# Team Roster',
           '',
           `Imported from OpenClaw Gateway (agent: ${agentReq.gateway_agent_id}).`,
           '',
           'Describe the other agents this agent collaborates with.',
-          'If this agent has an AGENTS.md in your OpenClaw workspace, paste its contents here.',
         ].join('\n');
+
+        const workspacePath = agentReq.gateway_workspace_path?.trim();
+        const loadMdFromWorkspace = (filename: 'SOUL.md' | 'USER.md' | 'AGENTS.md') => {
+          if (!workspacePath) return undefined;
+          try {
+            const fullPath = path.join(workspacePath, filename);
+            if (!existsSync(fullPath)) return undefined;
+            const content = readFileSync(fullPath, 'utf-8').trim();
+            return content.length > 0 ? content : undefined;
+          } catch {
+            return undefined;
+          }
+        };
+
+        const soulMd = loadMdFromWorkspace('SOUL.md') || defaultSoulMd;
+        const userMd = loadMdFromWorkspace('USER.md') || defaultUserMd;
+        const agentsMd = loadMdFromWorkspace('AGENTS.md') || defaultAgentsMd;
 
         run(
           `INSERT INTO agents (id, name, role, description, avatar_emoji, is_master, workspace_id, soul_md, user_md, agents_md, model, source, gateway_agent_id, created_at, updated_at)

@@ -82,6 +82,7 @@ export function DiscoverAgentsModal({ onClose, workspaceId }: DiscoverAgentsModa
           name: a.name,
           model: a.model,
           workspace_id: workspaceId || 'default',
+          gateway_workspace_path: a.workspace_path,
         }));
 
       const res = await fetch('/api/agents/import', {
@@ -256,10 +257,11 @@ export function DiscoverAgentsModal({ onClose, workspaceId }: DiscoverAgentsModa
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-mc-text-secondary mt-0.5">
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-mc-text-secondary mt-0.5">
                           {agent.model && <span>Model: {agent.model}</span>}
                           {agent.channel && <span>Channel: {agent.channel}</span>}
                           {agent.status && <span>Status: {agent.status}</span>}
+                          {agent.workspace_path && <span title={agent.workspace_path}>Workspace: {agent.workspace_path}</span>}
                           <span className="text-mc-text-secondary/60">ID: {agent.id}</span>
                         </div>
                       </div>

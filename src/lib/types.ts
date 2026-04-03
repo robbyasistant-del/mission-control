@@ -52,6 +52,7 @@ export interface DiscoveredAgent {
   model?: string;
   channel?: string;
   status?: string;
+  workspace_path?: string;
   already_imported: boolean;
   existing_agent_id?: string;
 }

@@ -14,6 +14,10 @@ interface GatewayAgent {
   model?: string;
   channel?: string;
   status?: string;
+  workspace?: string;
+  workspace_path?: string;
+  workspacePath?: string;
+  cwd?: string;
   [key: string]: unknown;
 }
 
@@ -63,6 +67,13 @@ export async function GET() {
     const discovered: DiscoveredAgent[] = gatewayAgents.map((ga) => {
       const gatewayId = ga.id || ga.name || '';
       const alreadyImported = importedGatewayIds.has(gatewayId);
+      const workspacePath =
+        (typeof ga.workspace_path === 'string' && ga.workspace_path) ||
+        (typeof ga.workspacePath === 'string' && ga.workspacePath) ||
+        (typeof ga.workspace === 'string' && ga.workspace) ||
+        (typeof ga.cwd === 'string' && ga.cwd) ||
+        undefined;
+
       return {
         id: gatewayId,
         name: ga.name || ga.label || gatewayId,
@@ -70,6 +81,7 @@ export async function GET() {
         model: ga.model,
         channel: ga.channel,
         status: ga.status,
+        workspace_path: workspacePath,
         already_imported: alreadyImported,
         existing_agent_id: alreadyImported ? importedGatewayIds.get(gatewayId) : undefined,
       };
