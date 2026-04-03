@@ -301,36 +301,6 @@ export default function NewAutopilotProductPage() {
               </select>
             </div>
 
-            {/* Build Mode */}
-            <div>
-              <label className="block text-sm font-medium text-mc-text mb-2">Build Mode</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, build_mode: 'plan_first' }))}
-                  className={`p-4 border rounded-lg text-left transition-colors ${
-                    form.build_mode === 'plan_first'
-                      ? 'border-mc-accent bg-mc-accent/10'
-                      : 'border-mc-border hover:border-mc-accent/50'
-                  }`}
-                >
-                  <div className="font-medium text-mc-text">Plan First</div>
-                  <div className="text-xs text-mc-text-secondary mt-1">Review plans before building</div>
-                </button>                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, build_mode: 'auto_build' }))}
-                  className={`p-4 border rounded-lg text-left transition-colors ${
-                    form.build_mode === 'auto_build'
-                      ? 'border-mc-accent bg-mc-accent/10'
-                      : 'border-mc-border hover:border-mc-accent/50'
-                  }`}
-                >
-                  <div className="font-medium text-mc-text">Auto Build</div>
-                  <div className="text-xs text-mc-text-secondary mt-1">Build automatically after planning</div>
-                </button>
-              </div>
-            </div>
-
             {/* Default Branch */}
             <div>
               <label className="block text-sm font-medium text-mc-text mb-2">Default Branch</label>
