@@ -11,9 +11,10 @@ import {
 import { run } from '@/lib/db';
 import type { AutopilotProduct } from '@/lib/db/autopilot-products';
 
-// Ensure table exists
+// Ensure table exists and has all columns
 function ensureTable() {
   try {
+    // Create table if not exists
     run(`
       CREATE TABLE IF NOT EXISTS autopilot_products (
         id TEXT PRIMARY KEY,
@@ -33,8 +34,20 @@ function ensureTable() {
         updated_at TEXT NOT NULL
       )
     `);
+    
+    // Migrate: add columns if they don't exist (SQLite doesn't support IF NOT EXISTS for ALTER)
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN source_code_path TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN local_deploy_path TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
   } catch (e) {
-    console.error('Failed to create autopilot_products table:', e);
+    console.error('Failed to create/migrate autopilot_products table:', e);
   }
 }
 
