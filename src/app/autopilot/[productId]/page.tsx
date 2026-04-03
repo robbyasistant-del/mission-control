@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Rocket, Play, Layers, Lightbulb, BarChart3, FileText, Zap, Loader, Settings, X, Save, ExternalLink, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FlaskConical, Play, Layers, Lightbulb, BarChart3, FileText, Zap, Loader, Settings, X, Save, ExternalLink, AlertTriangle } from 'lucide-react';
 import { SwipeDeck } from '@/components/autopilot/SwipeDeck';
 import { IdeasList } from '@/components/autopilot/IdeasList';
 import { ResearchReport } from '@/components/autopilot/ResearchReport';
@@ -261,8 +261,8 @@ export default function ProductDashboardPage() {
               href={`/autopilot/${productId}/swipe`}
               className="min-h-11 px-4 rounded-lg bg-mc-accent text-white hover:bg-mc-accent/90 flex items-center gap-2 text-sm font-medium"
             >
-              <Rocket className="w-4 h-4" />
-              Full Screen Swipe
+              <FlaskConical className="w-4 h-4" />
+              Laboratory Swipe
             </Link>
             <button
               onClick={openSettings}

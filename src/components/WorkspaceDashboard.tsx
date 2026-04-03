@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity, Rocket } from 'lucide-react';
+import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import type { WorkspaceStats } from '@/lib/types';
 
@@ -59,8 +59,8 @@ export function WorkspaceDashboard() {
                 href="/autopilot"
                 className="min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg-tertiary flex items-center gap-2 text-sm"
               >
-                <Rocket className="w-4 h-4" />
-                Autopilot
+                <FlaskConical className="w-4 h-4" />
+                Laboratory
               </Link>
               <Link
                 href="/activity"
@@ -269,7 +269,7 @@ function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onC
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const icons = ['📁', '💼', '🏢', '🚀', '💡', '🎯', '📊', '🔧', '🌟', '🏠'];
+  const icons = ['📁', '💼', '🏢', '🧪', '💡', '🎯', '📊', '🔧', '🌟', '🏠'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

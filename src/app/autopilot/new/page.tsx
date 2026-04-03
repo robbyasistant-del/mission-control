@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, Rocket, Search, Loader, AlertTriangle, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, FlaskConical, Search, Loader, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 type Step = 'basics' | 'program' | 'schedule' | 'done';
@@ -43,7 +43,7 @@ export default function NewProductPage() {
     description: '',
     repo_url: '',
     live_url: '',
-    icon: '🚀',
+    icon: '🧪',
     product_program: '',
     build_mode: 'plan_first' as 'plan_first' | 'auto_build',
     default_branch: 'main',
@@ -214,8 +214,8 @@ export default function NewProductPage() {
             <Link href="/autopilot" className="text-mc-text-secondary hover:text-mc-text">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <Rocket className="w-5 h-5 text-mc-accent-cyan" />
-            <h1 className="text-lg font-bold text-mc-text">New Product</h1>
+            <FlaskConical className="w-5 h-5 text-mc-accent-cyan" />
+            <h1 className="text-lg font-bold text-mc-text">New Laboratory Product</h1>
           </div>
         </div>
       </header>
@@ -390,7 +390,7 @@ export default function NewProductPage() {
               <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-300">
-                  Without a repository, Autopilot can research and generate ideas but agents
+                  Without a repository, Laboratory can research and generate ideas but agents
                   won&apos;t be able to build features or create pull requests.
                 </p>
               </div>
