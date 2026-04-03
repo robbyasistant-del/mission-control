@@ -1,6 +1,15 @@
 import { queryOne, queryAll, run } from './index';
 import { v4 as uuidv4 } from 'uuid';
 
+export type WorkflowState = 
+  | 'initial' 
+  | 'program' 
+  | 'executive' 
+  | 'architecture' 
+  | 'roadmap' 
+  | 'planned' 
+  | `sprint-${number}`;
+
 export interface AutopilotProduct {
   id: string;
   name: string;
@@ -11,10 +20,14 @@ export interface AutopilotProduct {
   local_deploy_path: string | null;
   icon: string | null;
   product_program: string | null;
+  executive_summary: string | null;
+  technical_architecture: string | null;
+  implementation_roadmap: string | null;
   build_mode: string | null;
   default_branch: string | null;
   workspace_id: string | null;
   status: string | null;
+  workflow_state: WorkflowState | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,17 +60,21 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
     local_deploy_path: input.local_deploy_path ?? null,
     icon: input.icon ?? '🚀',
     product_program: input.product_program ?? null,
+    executive_summary: null,
+    technical_architecture: null,
+    implementation_roadmap: null,
     build_mode: input.build_mode ?? 'plan_first',
     default_branch: input.default_branch ?? 'main',
     workspace_id: input.workspace_id ?? null,
     status: 'active',
+    workflow_state: 'initial',
     created_at: now,
     updated_at: now,
   };
 
   run(
-    `INSERT INTO autopilot_products (id, name, description, repo_url, live_url, source_code_path, local_deploy_path, icon, product_program, build_mode, default_branch, workspace_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO autopilot_products (id, name, description, repo_url, live_url, source_code_path, local_deploy_path, icon, product_program, executive_summary, technical_architecture, implementation_roadmap, build_mode, default_branch, workspace_id, status, workflow_state, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       product.id,
       product.name,
@@ -68,10 +85,14 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
       product.local_deploy_path,
       product.icon,
       product.product_program,
+      product.executive_summary,
+      product.technical_architecture,
+      product.implementation_roadmap,
       product.build_mode,
       product.default_branch,
       product.workspace_id,
       product.status,
+      product.workflow_state,
       product.created_at,
       product.updated_at,
     ]

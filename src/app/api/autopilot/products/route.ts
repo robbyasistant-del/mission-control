@@ -26,10 +26,14 @@ function ensureTable() {
         local_deploy_path TEXT,
         icon TEXT DEFAULT '🚀',
         product_program TEXT,
+        executive_summary TEXT,
+        technical_architecture TEXT,
+        implementation_roadmap TEXT,
         build_mode TEXT DEFAULT 'plan_first',
         default_branch TEXT DEFAULT 'main',
         workspace_id TEXT,
         status TEXT DEFAULT 'active',
+        workflow_state TEXT DEFAULT 'initial',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -43,6 +47,26 @@ function ensureTable() {
     }
     try {
       run(`ALTER TABLE autopilot_products ADD COLUMN local_deploy_path TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN executive_summary TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN technical_architecture TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN implementation_roadmap TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN workflow_state TEXT DEFAULT 'initial'`);
     } catch (e) {
       // Column likely exists, ignore
     }

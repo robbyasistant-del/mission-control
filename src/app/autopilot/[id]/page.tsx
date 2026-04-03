@@ -5,6 +5,15 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
+type WorkflowState = 
+  | 'initial' 
+  | 'program' 
+  | 'executive' 
+  | 'architecture' 
+  | 'roadmap' 
+  | 'planned' 
+  | `sprint-${number}`;
+
 interface AutopilotProduct {
   id: string;
   name: string;
@@ -15,21 +24,66 @@ interface AutopilotProduct {
   local_deploy_path?: string;
   icon?: string;
   product_program?: string;
+  executive_summary?: string;
+  technical_architecture?: string;
+  implementation_roadmap?: string;
   build_mode?: string;
   default_branch?: string;
+  workflow_state?: WorkflowState;
   created_at: string;
 }
 
 type Tab = 'basics' | 'program' | 'workflow' | 'activity';
 type WorkflowStep = 'program' | 'executive-summary' | 'technical-architecture' | 'implementation-roadmap' | 'sprints-tasks';
 
-const WORKFLOW_STEPS: { id: WorkflowStep; label: string }[] = [
-  { id: 'program', label: 'Product Program' },
-  { id: 'executive-summary', label: 'Executive Summary' },
-  { id: 'technical-architecture', label: 'Technical Architecture' },
-  { id: 'implementation-roadmap', label: 'Implementation Roadmap' },
-  { id: 'sprints-tasks', label: 'Sprints & Tasks' },
+const WORKFLOW_STEPS: { id: WorkflowStep; label: string; state: WorkflowState }[] = [
+  { id: 'program', label: 'Product Program', state: 'program' },
+  { id: 'executive-summary', label: 'Executive Summary', state: 'executive' },
+  { id: 'technical-architecture', label: 'Technical Architecture', state: 'architecture' },
+  { id: 'implementation-roadmap', label: 'Implementation Roadmap', state: 'roadmap' },
+  { id: 'sprints-tasks', label: 'Sprints & Tasks', state: 'planned' },
 ];
+
+// Map workflow state to step index
+const STATE_TO_INDEX: Record<string, number> = {
+  'initial': -1,
+  'program': 0,
+  'executive': 1,
+  'architecture': 2,
+  'roadmap': 3,
+  'planned': 4,
+};
+
+// Check if a step is accessible based on current workflow state
+function isStepAccessible(stepIndex: number, currentState: WorkflowState | undefined): boolean {
+  if (!currentState) return stepIndex === 0; // Only first step if no state
+  
+  // Handle sprint-N states as planned (index 4)
+  const stateIndex = currentState.startsWith('sprint-') 
+    ? 4 
+    : (STATE_TO_INDEX[currentState] ?? -1);
+  
+  // Step is accessible if it's <= current state + 1
+  // (current state is completed, next state is accessible)
+  return stepIndex <= stateIndex + 1;
+}
+
+// Check if a step is completed based on current workflow state
+function isStepCompleted(stepIndex: number, currentState: WorkflowState | undefined): boolean {
+  if (!currentState) return false;
+  
+  const stateIndex = currentState.startsWith('sprint-') 
+    ? 4 
+    : (STATE_TO_INDEX[currentState] ?? -1);
+  
+  return stepIndex <= stateIndex;
+}
+
+// Get next workflow state for a given step
+function getNextState(stepId: WorkflowStep): WorkflowState {
+  const step = WORKFLOW_STEPS.find(s => s.id === stepId);
+  return step?.state ?? 'initial';
+}
 
 export default function AutopilotProductPage() {
   const params = useParams();
@@ -39,17 +93,22 @@ export default function AutopilotProductPage() {
   const [activeTab, setActiveTab] = useState<Tab>('basics');
   const [activeWorkflowStep, setActiveWorkflowStep] = useState<WorkflowStep>('program');
   const [editedProgram, setEditedProgram] = useState('');
+  const [editedExecutive, setEditedExecutive] = useState('');
+  const [editedArchitecture, setEditedArchitecture] = useState('');
+  const [editedRoadmap, setEditedRoadmap] = useState('');
   const [saving, setSaving] = useState(false);
+  const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
   useEffect(() => {
     loadProduct();
   }, [params.id]);
 
   useEffect(() => {
-    if (product?.product_program) {
-      setEditedProgram(product.product_program);
-    }
-  }, [product?.product_program]);
+    setEditedProgram(product?.product_program || '');
+    setEditedExecutive(product?.executive_summary || '');
+    setEditedArchitecture(product?.technical_architecture || '');
+    setEditedRoadmap(product?.implementation_roadmap || '');
+  }, [product]);
 
   const loadProduct = async () => {
     try {
@@ -71,19 +130,40 @@ export default function AutopilotProductPage() {
     }
   };
 
-  const handleSaveProgram = async () => {
+  const currentState: WorkflowState = product?.workflow_state || 'initial';
+  const currentStateIndex = currentState.startsWith('sprint-') ? 4 : (STATE_TO_INDEX[currentState] ?? -1);
+
+  const handleSaveStep = async (step: WorkflowStep) => {
     if (!product) return;
+
+    const stepIndex = WORKFLOW_STEPS.findIndex(s => s.id === step);
+    const updates: Record<string, string> = {};
+
+    if (step === 'program') updates.product_program = editedProgram;
+    if (step === 'executive-summary') updates.executive_summary = editedExecutive;
+    if (step === 'technical-architecture') updates.technical_architecture = editedArchitecture;
+    if (step === 'implementation-roadmap') updates.implementation_roadmap = editedRoadmap;
+
+    // Advance only when saving the next progression step; editing previous steps won't rollback state
+    if (stepIndex > currentStateIndex) {
+      updates.workflow_state = getNextState(step);
+      setRegressionFromStep(null);
+    } else if (stepIndex < currentStateIndex) {
+      // Mark later steps as potentially stale (show !)
+      setRegressionFromStep(stepIndex);
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/autopilot/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_program: editedProgram }),
+        body: JSON.stringify(updates),
       });
       if (!res.ok) throw new Error('Failed to save');
-      setProduct(prev => prev ? { ...prev, product_program: editedProgram } : null);
-    } catch (err) {
-      alert('Failed to save program');
+      await loadProduct();
+    } catch {
+      alert('Failed to save');
     } finally {
       setSaving(false);
     }
@@ -256,7 +336,7 @@ export default function AutopilotProductPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide">Product Program (PRD)</h2>
                 <button
-                  onClick={handleSaveProgram}
+                  onClick={() => handleSaveStep('program')}
                   disabled={saving}
                   className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
                 >
@@ -278,30 +358,42 @@ export default function AutopilotProductPage() {
             {/* Workflow Progress Bar */}
             <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-4">
               <div className="flex items-center gap-2 overflow-x-auto">
-                {WORKFLOW_STEPS.map((step, index) => (
-                  <div key={step.id} className="flex items-center shrink-0">
-                    <button
-                      onClick={() => setActiveWorkflowStep(step.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        activeWorkflowStep === step.id
-                          ? 'bg-mc-accent text-mc-bg'
-                          : 'text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg'
-                      }`}
-                    >
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                        activeWorkflowStep === step.id
-                          ? 'bg-mc-bg text-mc-accent'
-                          : 'bg-mc-bg-tertiary text-mc-text-secondary'
-                      }`}>
-                        {index + 1}
-                      </span>
-                      {step.label}
-                    </button>
-                    {index < WORKFLOW_STEPS.length - 1 && (
-                      <ChevronRight className="w-4 h-4 text-mc-text-secondary mx-1" />
-                    )}
-                  </div>
-                ))}
+                {WORKFLOW_STEPS.map((step, index) => {
+                  const accessible = isStepAccessible(index, currentState);
+                  const completed = isStepCompleted(index, currentState);
+                  const stale = regressionFromStep !== null && index > regressionFromStep;
+
+                  return (
+                    <div key={step.id} className="flex items-center shrink-0">
+                      <button
+                        onClick={() => accessible && setActiveWorkflowStep(step.id)}
+                        disabled={!accessible}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          activeWorkflowStep === step.id
+                            ? 'bg-mc-accent text-mc-bg'
+                            : accessible
+                              ? 'text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg'
+                              : 'text-mc-text-secondary/40 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                          activeWorkflowStep === step.id
+                            ? 'bg-mc-bg text-mc-accent'
+                            : completed
+                              ? 'bg-green-600/20 text-green-400'
+                              : 'bg-mc-bg-tertiary text-mc-text-secondary'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        {step.label}
+                        {stale && <span className="text-yellow-400 font-bold">!</span>}
+                      </button>
+                      {index < WORKFLOW_STEPS.length - 1 && (
+                        <ChevronRight className="w-4 h-4 text-mc-text-secondary mx-1" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -322,7 +414,7 @@ export default function AutopilotProductPage() {
                   />
                   <div className="flex justify-end">
                     <button
-                      onClick={handleSaveProgram}
+                      onClick={() => handleSaveStep('program')}
                       disabled={saving}
                       className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
                     >
@@ -339,9 +431,16 @@ export default function AutopilotProductPage() {
                     <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 2 of 5</span>
                   </div>
                   <p className="text-sm text-mc-text-secondary">High-level overview for stakeholders and decision makers.</p>
-                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
-                    <p className="text-mc-text-secondary">Executive Summary editor coming soon.</p>
+                  <textarea
+                    value={editedExecutive}
+                    onChange={(e) => setEditedExecutive(e.target.value)}
+                    placeholder="# Executive Summary"
+                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                  />
+                  <div className="flex justify-end">
+                    <button onClick={() => handleSaveStep('executive-summary')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
+                      {saving ? 'Saving...' : 'Save Executive Summary'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -353,9 +452,16 @@ export default function AutopilotProductPage() {
                     <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 3 of 5</span>
                   </div>
                   <p className="text-sm text-mc-text-secondary">System design, tech stack, and infrastructure decisions.</p>
-                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
-                    <p className="text-mc-text-secondary">Technical Architecture editor coming soon.</p>
+                  <textarea
+                    value={editedArchitecture}
+                    onChange={(e) => setEditedArchitecture(e.target.value)}
+                    placeholder="# Technical Architecture"
+                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                  />
+                  <div className="flex justify-end">
+                    <button onClick={() => handleSaveStep('technical-architecture')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
+                      {saving ? 'Saving...' : 'Save Technical Architecture'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -367,9 +473,16 @@ export default function AutopilotProductPage() {
                     <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 4 of 5</span>
                   </div>
                   <p className="text-sm text-mc-text-secondary">Timeline, milestones, and resource allocation plan.</p>
-                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
-                    <p className="text-mc-text-secondary">Implementation Roadmap editor coming soon.</p>
+                  <textarea
+                    value={editedRoadmap}
+                    onChange={(e) => setEditedRoadmap(e.target.value)}
+                    placeholder="# Implementation Roadmap"
+                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                  />
+                  <div className="flex justify-end">
+                    <button onClick={() => handleSaveStep('implementation-roadmap')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
+                      {saving ? 'Saving...' : 'Save Implementation Roadmap'}
+                    </button>
                   </div>
                 </div>
               )}
