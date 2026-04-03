@@ -118,7 +118,7 @@ export default function HealthDashboardPage() {
       <div className="min-h-screen bg-mc-bg flex items-center justify-center">
         <div className="text-center">
           <p className="text-mc-text-secondary">Product not found</p>
-          <Link href="/autopilot" className="text-mc-accent hover:underline mt-2 inline-block">
+          <Link href="/laboratory" className="text-mc-accent hover:underline mt-2 inline-block">
             ← Back to products
           </Link>
         </div>
@@ -138,7 +138,7 @@ export default function HealthDashboardPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => router.push(`/autopilot/${productId}`)}
+                onClick={() => router.push(`/laboratory/${productId}`)}
                 className="p-2 rounded-lg hover:bg-mc-bg-tertiary text-mc-text-secondary hover:text-mc-text transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -311,7 +311,7 @@ export default function HealthDashboardPage() {
           <p className="text-xs text-mc-text-secondary mt-3">
             Adjust weights in{' '}
             <Link
-              href={`/autopilot/${productId}`}
+              href={`/laboratory/${productId}`}
               className="text-mc-accent hover:underline"
             >
               Product Settings

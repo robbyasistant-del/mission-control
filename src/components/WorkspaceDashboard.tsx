@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity, FlaskConical } from 'lucide-react';
+import { Plus, ArrowRight, Folder, Users, CheckSquare, Trash2, AlertTriangle, Activity, FlaskConical, Rocket } from 'lucide-react';
 import Link from 'next/link';
 import type { WorkspaceStats } from '@/lib/types';
 
@@ -56,11 +56,18 @@ export function WorkspaceDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <Link
-                href="/autopilot"
+                href="/laboratory"
                 className="min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg-tertiary flex items-center gap-2 text-sm"
               >
                 <FlaskConical className="w-4 h-4" />
                 Laboratory
+              </Link>
+              <Link
+                href="/autopilot"
+                className="min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg-tertiary flex items-center gap-2 text-sm"
+              >
+                <Rocket className="w-4 h-4" />
+                Autopilot
               </Link>
               <Link
                 href="/activity"

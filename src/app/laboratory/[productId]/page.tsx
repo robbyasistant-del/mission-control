@@ -201,7 +201,7 @@ export default function ProductDashboardPage() {
       <header className="border-b border-mc-border bg-mc-bg-secondary px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/autopilot" className="text-mc-text-secondary hover:text-mc-text">
+            <Link href="/laboratory" className="text-mc-text-secondary hover:text-mc-text">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <span className="text-2xl">{product.icon}</span>
@@ -258,7 +258,7 @@ export default function ProductDashboardPage() {
               </div>
             )}
             <Link
-              href={`/autopilot/${productId}/swipe`}
+              href={`/laboratory/${productId}/swipe`}
               className="min-h-11 px-4 rounded-lg bg-mc-accent text-white hover:bg-mc-accent/90 flex items-center gap-2 text-sm font-medium"
             >
               <FlaskConical className="w-4 h-4" />

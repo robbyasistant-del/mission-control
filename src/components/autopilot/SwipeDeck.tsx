@@ -229,7 +229,7 @@ export function SwipeDeck({ productId }: SwipeDeckProps) {
         </div>
         {showReviewAll && (
           <Link
-            href={`/autopilot/${productId}/review`}
+            href={`/laboratory/${productId}/review`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-mc-accent/20 text-mc-accent rounded-lg hover:bg-mc-accent/30 transition-colors"
           >
             <ListChecks className="w-3.5 h-3.5" />
@@ -309,3 +309,4 @@ export function SwipeDeck({ productId }: SwipeDeckProps) {
     </div>
   );
 }
+

@@ -211,7 +211,7 @@ export default function NewProductPage() {
       <header className="border-b border-mc-border bg-mc-bg-secondary">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
-            <Link href="/autopilot" className="text-mc-text-secondary hover:text-mc-text">
+            <Link href="/laboratory" className="text-mc-text-secondary hover:text-mc-text">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <FlaskConical className="w-5 h-5 text-mc-accent-cyan" />
@@ -479,7 +479,7 @@ export default function NewProductPage() {
               </div>
             </div>
             <button
-              onClick={() => router.push(`/autopilot/${productId}`)}
+              onClick={() => router.push(`/laboratory/${productId}`)}
               className="w-full min-h-11 bg-mc-accent text-white rounded-lg font-medium hover:bg-mc-accent/90 flex items-center justify-center gap-2"
             >
               <Check className="w-4 h-4" />
@@ -491,3 +491,4 @@ export default function NewProductPage() {
     </div>
   );
 }
+

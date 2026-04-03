@@ -32,13 +32,13 @@ export default function BatchReviewPage() {
 
   const handleBatchComplete = () => {
     // Navigate back to swipe deck or product page
-    router.push(`/autopilot/${productId}/swipe`);
+    router.push(`/laboratory/${productId}/swipe`);
   };
 
   return (
     <div className="min-h-screen bg-mc-bg flex flex-col">
       <header className="border-b border-mc-border bg-mc-bg-secondary px-4 py-3 flex items-center gap-3">
-        <Link href={`/autopilot/${productId}/swipe`} className="text-mc-text-secondary hover:text-mc-text">
+        <Link href={`/laboratory/${productId}/swipe`} className="text-mc-text-secondary hover:text-mc-text">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <Layers className="w-5 h-5 text-mc-accent" />
