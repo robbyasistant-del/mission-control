@@ -147,6 +147,7 @@ export async function POST(
     );
 
     const result = await complete(prompt, {
+      model: 'openclaw',
       systemPrompt: 'You are an expert software architect. You create comprehensive technical architecture documents with all sections fully detailed. Include complete information for all 4 sections (Architecture Overview, Database Schema, API Design, and Infrastructure). Never truncate or summarize - provide full details.',
       temperature: 0.7,
       maxTokens: 8000,
