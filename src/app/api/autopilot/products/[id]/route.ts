@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
+import {
   getAutopilotProduct,
   updateAutopilotProduct,
   archiveAutopilotProduct,
   deleteAutopilotProduct
 } from '@/lib/db/autopilot-products';
+import { run } from '@/lib/db';
+
+function ensureAutopilotColumns() {
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt TEXT`); } catch {}
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN executive_summary TEXT`); } catch {}
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN technical_architecture TEXT`); } catch {}
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN implementation_roadmap TEXT`); } catch {}
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN workflow_state TEXT DEFAULT 'initial'`); } catch {}
+}
 
 // GET /api/autopilot/products/[id] - Get single product
 export async function GET(
@@ -12,6 +21,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    ensureAutopilotColumns();
     const product = getAutopilotProduct(params.id);
     
     if (!product) {
@@ -37,6 +47,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    ensureAutopilotColumns();
     const body = await request.json();
     const product = updateAutopilotProduct(params.id, body);
     

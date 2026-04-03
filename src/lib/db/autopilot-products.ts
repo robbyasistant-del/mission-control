@@ -21,6 +21,7 @@ export interface AutopilotProduct {
   icon: string | null;
   product_program: string | null;
   executive_summary: string | null;
+  additional_prompt: string | null;
   technical_architecture: string | null;
   implementation_roadmap: string | null;
   build_mode: string | null;
@@ -61,6 +62,7 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
     icon: input.icon ?? '🚀',
     product_program: input.product_program ?? null,
     executive_summary: null,
+    additional_prompt: null,
     technical_architecture: null,
     implementation_roadmap: null,
     build_mode: input.build_mode ?? 'plan_first',

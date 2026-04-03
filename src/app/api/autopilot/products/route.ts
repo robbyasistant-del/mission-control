@@ -27,6 +27,7 @@ function ensureTable() {
         icon TEXT DEFAULT '🚀',
         product_program TEXT,
         executive_summary TEXT,
+        additional_prompt TEXT,
         technical_architecture TEXT,
         implementation_roadmap TEXT,
         build_mode TEXT DEFAULT 'plan_first',
@@ -62,6 +63,11 @@ function ensureTable() {
     }
     try {
       run(`ALTER TABLE autopilot_products ADD COLUMN implementation_roadmap TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt TEXT`);
     } catch (e) {
       // Column likely exists, ignore
     }

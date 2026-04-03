@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 type WorkflowState = 
@@ -25,6 +25,7 @@ interface AutopilotProduct {
   icon?: string;
   product_program?: string;
   executive_summary?: string;
+  additional_prompt?: string;
   technical_architecture?: string;
   implementation_roadmap?: string;
   build_mode?: string;
@@ -96,6 +97,9 @@ export default function AutopilotProductPage() {
   const [editedExecutive, setEditedExecutive] = useState('');
   const [editedArchitecture, setEditedArchitecture] = useState('');
   const [editedRoadmap, setEditedRoadmap] = useState('');
+  const [additionalPrompt, setAdditionalPrompt] = useState('');
+  const [autoBuildingExecutive, setAutoBuildingExecutive] = useState(false);
+  const [executiveCountdown, setExecutiveCountdown] = useState(300);
   const [saving, setSaving] = useState(false);
   const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
@@ -108,6 +112,7 @@ export default function AutopilotProductPage() {
     setEditedExecutive(product?.executive_summary || '');
     setEditedArchitecture(product?.technical_architecture || '');
     setEditedRoadmap(product?.implementation_roadmap || '');
+    setAdditionalPrompt(product?.additional_prompt || '');
   }, [product]);
 
   const loadProduct = async () => {
@@ -144,12 +149,14 @@ export default function AutopilotProductPage() {
     if (step === 'technical-architecture') updates.technical_architecture = editedArchitecture;
     if (step === 'implementation-roadmap') updates.implementation_roadmap = editedRoadmap;
 
+    // persist prompt separately when saving executive step
+    if (step === 'executive-summary') updates.additional_prompt = additionalPrompt;
+
     // Advance only when saving the next progression step; editing previous steps won't rollback state
     if (stepIndex > currentStateIndex) {
       updates.workflow_state = getNextState(step);
       setRegressionFromStep(null);
     } else if (stepIndex < currentStateIndex) {
-      // Mark later steps as potentially stale (show !)
       setRegressionFromStep(stepIndex);
     }
 
@@ -168,6 +175,37 @@ export default function AutopilotProductPage() {
       setSaving(false);
     }
   };
+
+  const handleAutoBuildExecutive = async () => {
+    if (!product) return;
+    setAutoBuildingExecutive(true);
+    setExecutiveCountdown(300);
+
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/generate-executive-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ additional_prompt: additionalPrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to generate executive summary');
+      setEditedExecutive(data.executiveSummary || '');
+      await loadProduct();
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to auto-build executive summary');
+    } finally {
+      setAutoBuildingExecutive(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!autoBuildingExecutive) return;
+    const t = setInterval(() => {
+      setExecutiveCountdown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [autoBuildingExecutive]);
 
   if (loading) {
     return (
@@ -425,22 +463,56 @@ export default function AutopilotProductPage() {
               )}
 
               {activeWorkflowStep === 'executive-summary' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-mc-text">Executive Summary</h2>
-                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 2 of 5</span>
-                  </div>
-                  <p className="text-sm text-mc-text-secondary">High-level overview for stakeholders and decision makers.</p>
-                  <textarea
-                    value={editedExecutive}
-                    onChange={(e) => setEditedExecutive(e.target.value)}
-                    placeholder="# Executive Summary"
-                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
-                  />
-                  <div className="flex justify-end">
-                    <button onClick={() => handleSaveStep('executive-summary')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
-                      {saving ? 'Saving...' : 'Save Executive Summary'}
+                <div className="flex flex-col h-[calc(100vh-280px)] gap-4">
+                  {/* Top section - 25% */}
+                  <div className="flex-[25] flex items-stretch gap-4 bg-mc-bg rounded-lg border border-mc-border p-4 min-h-[180px]">
+                    {/* Additional Prompt */}
+                    <div className="flex-1 flex flex-col gap-2">
+                      <label className="text-xs font-medium text-mc-text-secondary uppercase tracking-wide">Additional Prompt</label>
+                      <textarea
+                        value={additionalPrompt}
+                        onChange={(e) => setAdditionalPrompt(e.target.value)}
+                        placeholder="Add any specific instructions or context for the executive summary generation..."
+                        className="w-full h-full min-h-[120px] bg-mc-bg-tertiary border border-mc-border rounded-lg p-3 text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                      />
+                    </div>
+
+                    {/* Arrow indicator */}
+                    <div className="flex items-center gap-2 text-mc-text-secondary">
+                      <span className="text-xs bg-mc-bg-tertiary px-2 py-1 rounded border border-mc-border">+ Product Program</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
+
+                    {/* Auto-Build Button */}
+                    <button
+                      onClick={handleAutoBuildExecutive}
+                      disabled={autoBuildingExecutive || !product?.product_program}
+                      className="px-4 py-3 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 whitespace-nowrap min-w-[120px]"
+                    >
+                      {autoBuildingExecutive ? `Building… ${executiveCountdown}s` : 'Auto-Build'}
                     </button>
+                  </div>
+
+                  {/* Bottom section - 75% */}
+                  <div className="flex-[75] flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-mc-text">Executive Summary</h2>
+                        <p className="text-sm text-mc-text-secondary">High-level overview for stakeholders and decision makers.</p>
+                      </div>
+                      <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded border border-mc-border">Step 2 of 5</span>
+                    </div>
+                    <textarea
+                      value={editedExecutive}
+                      onChange={(e) => setEditedExecutive(e.target.value)}
+                      placeholder="# Executive Summary&#10;&#10;Write a concise executive summary covering:&#10;- Problem statement&#10;- Solution overview&#10;- Key metrics and goals&#10;- Resource requirements&#10;- Timeline highlights"
+                      className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                    />
+                    <div className="flex justify-end">
+                      <button onClick={() => handleSaveStep('executive-summary')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
+                        {saving ? 'Saving...' : 'Save Executive Summary'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
