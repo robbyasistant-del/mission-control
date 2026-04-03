@@ -508,6 +508,7 @@ export default function AutopilotProductPage() {
                       onChange={(e) => setEditedExecutive(e.target.value)}
                       placeholder="# Executive Summary&#10;&#10;Write a concise executive summary covering:&#10;- Problem statement&#10;- Solution overview&#10;- Key metrics and goals&#10;- Resource requirements&#10;- Timeline highlights"
                       disabled={autoBuildingExecutive}
+                      maxLength={50000}
                       className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
                     />
                     <div className="flex justify-end">
