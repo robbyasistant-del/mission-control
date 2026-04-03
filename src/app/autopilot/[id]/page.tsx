@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 interface AutopilotProduct {
@@ -20,7 +20,16 @@ interface AutopilotProduct {
   created_at: string;
 }
 
-type Tab = 'basics' | 'program' | 'activity';
+type Tab = 'basics' | 'program' | 'workflow' | 'activity';
+type WorkflowStep = 'program' | 'executive-summary' | 'technical-architecture' | 'implementation-roadmap' | 'sprints-tasks';
+
+const WORKFLOW_STEPS: { id: WorkflowStep; label: string }[] = [
+  { id: 'program', label: 'Product Program' },
+  { id: 'executive-summary', label: 'Executive Summary' },
+  { id: 'technical-architecture', label: 'Technical Architecture' },
+  { id: 'implementation-roadmap', label: 'Implementation Roadmap' },
+  { id: 'sprints-tasks', label: 'Sprints & Tasks' },
+];
 
 export default function AutopilotProductPage() {
   const params = useParams();
@@ -28,6 +37,7 @@ export default function AutopilotProductPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('basics');
+  const [activeWorkflowStep, setActiveWorkflowStep] = useState<WorkflowStep>('program');
   const [editedProgram, setEditedProgram] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -106,6 +116,7 @@ export default function AutopilotProductPage() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'basics', label: 'Basic Info', icon: <Settings className="w-4 h-4" /> },
     { id: 'program', label: 'Product Program', icon: <FileText className="w-4 h-4" /> },
+    { id: 'workflow', label: 'Product Workflow', icon: <Workflow className="w-4 h-4" /> },
     { id: 'activity', label: 'Activity', icon: <Activity className="w-4 h-4" /> },
   ];
 
@@ -258,6 +269,157 @@ export default function AutopilotProductPage() {
                 placeholder="# Product Requirements Document..."
                 className="w-full h-[60vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
               />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'workflow' && (
+          <div className="space-y-6">
+            {/* Workflow Progress Bar */}
+            <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-4">
+              <div className="flex items-center gap-2 overflow-x-auto">
+                {WORKFLOW_STEPS.map((step, index) => (
+                  <div key={step.id} className="flex items-center shrink-0">
+                    <button
+                      onClick={() => setActiveWorkflowStep(step.id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeWorkflowStep === step.id
+                          ? 'bg-mc-accent text-mc-bg'
+                          : 'text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                        activeWorkflowStep === step.id
+                          ? 'bg-mc-bg text-mc-accent'
+                          : 'bg-mc-bg-tertiary text-mc-text-secondary'
+                      }`}>
+                        {index + 1}
+                      </span>
+                      {step.label}
+                    </button>
+                    {index < WORKFLOW_STEPS.length - 1 && (
+                      <ChevronRight className="w-4 h-4 text-mc-text-secondary mx-1" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Workflow Step Content */}
+            <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-6">
+              {activeWorkflowStep === 'program' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-mc-text">Product Program</h2>
+                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 1 of 5</span>
+                  </div>
+                  <p className="text-sm text-mc-text-secondary">Define the core product requirements and specifications.</p>
+                  <textarea
+                    value={editedProgram}
+                    onChange={(e) => setEditedProgram(e.target.value)}
+                    placeholder="# Product Requirements Document..."
+                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSaveProgram}
+                      disabled={saving}
+                      className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save Program'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeWorkflowStep === 'executive-summary' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-mc-text">Executive Summary</h2>
+                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 2 of 5</span>
+                  </div>
+                  <p className="text-sm text-mc-text-secondary">High-level overview for stakeholders and decision makers.</p>
+                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
+                    <p className="text-mc-text-secondary">Executive Summary editor coming soon.</p>
+                  </div>
+                </div>
+              )}
+
+              {activeWorkflowStep === 'technical-architecture' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-mc-text">Technical Architecture</h2>
+                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 3 of 5</span>
+                  </div>
+                  <p className="text-sm text-mc-text-secondary">System design, tech stack, and infrastructure decisions.</p>
+                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
+                    <p className="text-mc-text-secondary">Technical Architecture editor coming soon.</p>
+                  </div>
+                </div>
+              )}
+
+              {activeWorkflowStep === 'implementation-roadmap' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-mc-text">Implementation Roadmap</h2>
+                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 4 of 5</span>
+                  </div>
+                  <p className="text-sm text-mc-text-secondary">Timeline, milestones, and resource allocation plan.</p>
+                  <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-12 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
+                    <p className="text-mc-text-secondary">Implementation Roadmap editor coming soon.</p>
+                  </div>
+                </div>
+              )}
+
+              {activeWorkflowStep === 'sprints-tasks' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-mc-text">Sprints & Tasks</h2>
+                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 5 of 5</span>
+                  </div>
+                  <p className="text-sm text-mc-text-secondary">Development sprints with tasks, agents, and status tracking.</p>
+                  
+                  {/* Sample Sprint Layout */}
+                  <div className="space-y-6">
+                    <div className="bg-mc-bg rounded-lg border border-mc-border p-4">
+                      <h3 className="font-semibold text-mc-text mb-3">Sprint 1: Foundation & Setup</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
+                          <span className="text-mc-accent font-mono">[rob_web]</span>
+                          <span className="text-mc-text-secondary font-mono">[2026-03-31 16:27]</span>
+                          <span className="text-mc-text-secondary font-mono">[2026-03-31 16:28]</span>
+                          <span className="text-green-400 font-mono">[done]</span>
+                          <span className="flex-1 text-mc-text">Technical architecture design</span>
+                          <input type="checkbox" checked className="accent-mc-accent" readOnly />
+                        </div>
+                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
+                          <span className="text-mc-accent font-mono">[rob_asogrowth]</span>
+                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
+                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
+                          <span className="text-yellow-400 font-mono">[pending]</span>
+                          <span className="flex-1 text-mc-text">Establish data quality checks</span>
+                          <input type="checkbox" className="accent-mc-accent" />
+                        </div>
+                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
+                          <span className="text-mc-accent font-mono">[rob_asogrowth]</span>
+                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
+                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
+                          <span className="text-yellow-400 font-mono">[pending]</span>
+                          <span className="flex-1 text-mc-text">Create staging tables</span>
+                          <input type="checkbox" className="accent-mc-accent" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-8 text-center">
+                      <p className="text-mc-text-secondary text-sm">+ Add new sprint</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
