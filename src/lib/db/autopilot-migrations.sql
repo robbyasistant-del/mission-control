@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS autopilot_products (
   description TEXT,
   repo_url TEXT,
   live_url TEXT,
+  source_code_path TEXT,
+  local_deploy_path TEXT,
   icon TEXT DEFAULT '🚀',
   product_program TEXT,
   build_mode TEXT DEFAULT 'plan_first',

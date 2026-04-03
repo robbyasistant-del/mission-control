@@ -7,6 +7,8 @@ export interface AutopilotProduct {
   description: string | null;
   repo_url: string | null;
   live_url: string | null;
+  source_code_path: string | null;
+  local_deploy_path: string | null;
   icon: string | null;
   product_program: string | null;
   build_mode: string | null;
@@ -22,6 +24,8 @@ export interface CreateAutopilotProductInput {
   description?: string;
   repo_url?: string;
   live_url?: string;
+  source_code_path?: string;
+  local_deploy_path?: string;
   icon?: string;
   product_program?: string;
   build_mode?: 'plan_first' | 'auto_build';
@@ -39,6 +43,8 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
     description: input.description ?? null,
     repo_url: input.repo_url ?? null,
     live_url: input.live_url ?? null,
+    source_code_path: input.source_code_path ?? null,
+    local_deploy_path: input.local_deploy_path ?? null,
     icon: input.icon ?? '🚀',
     product_program: input.product_program ?? null,
     build_mode: input.build_mode ?? 'plan_first',
@@ -50,14 +56,16 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
   };
 
   run(
-    `INSERT INTO autopilot_products (id, name, description, repo_url, live_url, icon, product_program, build_mode, default_branch, workspace_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO autopilot_products (id, name, description, repo_url, live_url, source_code_path, local_deploy_path, icon, product_program, build_mode, default_branch, workspace_id, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       product.id,
       product.name,
       product.description,
       product.repo_url,
       product.live_url,
+      product.source_code_path,
+      product.local_deploy_path,
       product.icon,
       product.product_program,
       product.build_mode,

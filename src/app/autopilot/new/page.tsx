@@ -40,6 +40,8 @@ export default function NewAutopilotProductPage() {
     description: '',
     repo_url: '',
     live_url: '',
+    source_code_path: '',
+    local_deploy_path: '',
     icon: '🚀',
     product_program: '',
     build_mode: 'plan_first' as 'plan_first' | 'auto_build',
@@ -276,6 +278,30 @@ export default function NewAutopilotProductPage() {
                   onChange={e => setForm(f => ({ ...f, live_url: e.target.value }))}
                   className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
                   placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            {/* Local Paths */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-mc-text mb-2">Source-code:</label>
+                <input
+                  type="text"
+                  value={form.source_code_path}
+                  onChange={e => setForm(f => ({ ...f, source_code_path: e.target.value }))}
+                  className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
+                  placeholder="C:\\path\\to\\source"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-mc-text mb-2">Local Deploy:</label>
+                <input
+                  type="text"
+                  value={form.local_deploy_path}
+                  onChange={e => setForm(f => ({ ...f, local_deploy_path: e.target.value }))}
+                  className="w-full bg-mc-bg-tertiary border border-mc-border rounded-lg px-4 py-3 text-mc-text text-sm focus:outline-none focus:border-mc-accent"
+                  placeholder="C:\\path\\to\\deploy"
                 />
               </div>
             </div>
