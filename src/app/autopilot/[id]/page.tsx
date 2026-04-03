@@ -545,8 +545,8 @@ export default function AutopilotProductPage() {
                       onChange={(e) => setEditedExecutive(e.target.value)}
                       placeholder="# Executive Summary&#10;&#10;Write a concise executive summary covering:&#10;- Problem statement&#10;- Solution overview&#10;- Key metrics and goals&#10;- Resource requirements&#10;- Timeline highlights"
                       disabled={autoBuildingExecutive}
-                      maxLength={50000}
-                      className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
+                      maxLength={100000}
+                      className="flex-1 w-full min-h-[400px] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60 overflow-auto"
                     />
                     <div className="flex justify-end">
                       <button onClick={() => handleSaveStep('executive-summary')} disabled={saving || autoBuildingExecutive} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
@@ -591,7 +591,7 @@ export default function AutopilotProductPage() {
                   </div>
 
                   {/* Bottom section - 75% */}
-                  <div className="flex-[75] flex flex-col gap-3">
+                  <div className="flex-[75] flex flex-col gap-3 min-h-0">
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold text-mc-text">Technical Architecture</h2>
@@ -604,8 +604,8 @@ export default function AutopilotProductPage() {
                       onChange={(e) => setEditedArchitecture(e.target.value)}
                       placeholder="# Technical Architecture&#10;&#10;## 1. Architecture Overview&#10;### 1.1 High-Level Architecture&#10;[Diagram description]&#10;&#10;### 1.2 Technology Stack&#10;| Layer | Technology | Purpose |&#10;&#10;## 2. Database Schema Design&#10;### 2.1 Core Tables&#10;[Table definitions]"
                       disabled={autoBuildingArch}
-                      maxLength={50000}
-                      className="flex-1 w-full bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
+                      maxLength={100000}
+                      className="flex-1 w-full min-h-[400px] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60 overflow-auto"
                     />
                     <div className="flex justify-end">
                       <button onClick={() => handleSaveStep('technical-architecture')} disabled={saving || autoBuildingArch} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
