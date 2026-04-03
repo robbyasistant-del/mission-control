@@ -595,7 +595,7 @@ export default function AutopilotProductPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold text-mc-text">Technical Architecture</h2>
-                        <p className="text-sm text-mc-text-secondary">System design, tech stack, and infrastructure decisions.</p>
+                        <p className="text-sm text-mc-text-secondary">System design, tech stack, and infrastructure decisions. ({editedArchitecture.length} chars)</p>
                       </div>
                       <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded border border-mc-border">Step 3 of 5</span>
                     </div>

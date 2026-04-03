@@ -147,12 +147,14 @@ export async function POST(
     );
 
     const result = await complete(prompt, {
-      model: 'openclaw',
       systemPrompt: 'You are an expert software architect. You create comprehensive technical architecture documents with all sections fully detailed. Include complete information for all 4 sections (Architecture Overview, Database Schema, API Design, and Infrastructure). Never truncate or summarize - provide full details.',
       temperature: 0.7,
       maxTokens: 8000,
       timeoutMs: 300_000,
     });
+
+    console.log(`[TechArch] Raw response length: ${result.content.length} chars`);
+    console.log(`[TechArch] Response preview (last 500 chars): ${result.content.slice(-500)}`);
 
     let technicalArchitecture = result.content.trim();
     
@@ -165,10 +167,16 @@ export async function POST(
       technicalArchitecture = `## 1. Architecture Overview\n\n${technicalArchitecture}`;
     }
 
+    console.log(`[TechArch] Final content length: ${technicalArchitecture.length} chars`);
+    console.log(`[TechArch] Content includes '## 4.': ${technicalArchitecture.includes('## 4.')}`);
+    console.log(`[TechArch] Content includes '### 4.3': ${technicalArchitecture.includes('### 4.3')}`);
+
     updateAutopilotProduct(params.id, { 
       technical_architecture: technicalArchitecture,
       workflow_state: 'architecture'
     });
+
+    console.log(`[TechArch] Saved to DB for product ${params.id}`);
 
     return NextResponse.json({
       technicalArchitecture,
