@@ -258,7 +258,14 @@ export function DiscoverAgentsModal({ onClose, workspaceId }: DiscoverAgentsModa
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-mc-text-secondary mt-0.5">
-                          {agent.model && <span>Model: {agent.model}</span>}
+                          {agent.model && (
+                            <span>
+                              Model:{' '}
+                              {typeof agent.model === 'string'
+                                ? agent.model
+                                : agent.model.primary || 'unknown'}
+                            </span>
+                          )}
                           {agent.channel && <span>Channel: {agent.channel}</span>}
                           {agent.status && <span>Status: {agent.status}</span>}
                           {agent.workspace_path && <span title={agent.workspace_path}>Workspace: {agent.workspace_path}</span>}

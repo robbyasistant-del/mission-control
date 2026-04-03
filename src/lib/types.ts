@@ -49,7 +49,7 @@ export interface DiscoveredAgent {
   id: string;
   name: string;
   label?: string;
-  model?: string;
+  model?: string | { primary?: string; fallbacks?: string[] };
   channel?: string;
   status?: string;
   workspace_path?: string;
