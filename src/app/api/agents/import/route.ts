@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 interface ImportAgentRequest {
   gateway_agent_id: string;
   name: string;
-  model?: string;
+  model?: string | { primary?: string; fallbacks?: string[] };
   workspace_id?: string;
   gateway_workspace_path?: string;
 }
@@ -108,6 +108,11 @@ export async function POST(request: NextRequest) {
         const userMd = loadMdFromWorkspace('USER.md') || defaultUserMd;
         const agentsMd = loadMdFromWorkspace('AGENTS.md') || defaultAgentsMd;
 
+        const normalizedModel =
+          typeof agentReq.model === 'string'
+            ? agentReq.model
+            : agentReq.model?.primary || null;
+
         run(
           `INSERT INTO agents (id, name, role, description, avatar_emoji, is_master, workspace_id, soul_md, user_md, agents_md, model, source, gateway_agent_id, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -122,7 +127,7 @@ export async function POST(request: NextRequest) {
             soulMd,
             userMd,
             agentsMd,
-            agentReq.model || null,
+            normalizedModel,
             'gateway',
             agentReq.gateway_agent_id,
             now,
