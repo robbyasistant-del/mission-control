@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOpenClawClient } from '@/lib/openclaw/client';
-import { queryOne } from '@/lib/db';
-import type { OpenClawHistoryMessage, OpenClawSessionInfo } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,15 +59,89 @@ Product info:
 - Local Deploy path: ${input.local_deploy_path || ''}`;
 }
 
-function extractLastAssistant(history: unknown[]): string | null {
-  if (!Array.isArray(history)) return null;
-  const msgs = history as OpenClawHistoryMessage[];
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i];
-    if (m?.role === 'assistant' && typeof m.content === 'string' && m.content.trim()) {
-      return m.content.trim();
+// Call Gateway REST API directly
+async function gatewayCall<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+  const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://127.0.0.1:18789';
+  const token = process.env.OPENCLAW_GATEWAY_TOKEN || '';
+  
+  const response = await fetch(`${gatewayUrl}/api/v1/rpc`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      type: 'req',
+      id: crypto.randomUUID(),
+      method,
+      params,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gateway error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.ok === false && data.error) {
+    throw new Error(data.error.message || 'Gateway RPC error');
+  }
+  return data.payload as T;
+}
+
+async function findMainSession(): Promise<string | null> {
+  try {
+    // Try to find main session via RPC
+    const sessions = await gatewayCall<Array<{ id: string; channel?: string; peer?: string }>>('sessions.list');
+    
+    // Look for main session
+    const main = sessions.find((s) => s.id === 'main') 
+      || sessions.find((s) => (s.channel || '').toLowerCase() === 'main')
+      || sessions[0];
+    
+    return main?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendMessageAndWait(sessionId: string, content: string, timeoutMs: number): Promise<string | null> {
+  // Get history before sending
+  const beforeHistory = await gatewayCall<Array<{ role?: string; content?: string }>>('sessions.history', { 
+    session_id: sessionId 
+  });
+  const beforeLen = beforeHistory?.length || 0;
+
+  // Send message
+  await gatewayCall('sessions.send', { 
+    session_id: sessionId, 
+    content 
+  });
+
+  // Poll for response
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    await sleep(3000);
+    
+    try {
+      const history = await gatewayCall<Array<{ role?: string; content?: string }>>('sessions.history', { 
+        session_id: sessionId 
+      });
+      
+      if (history && history.length > beforeLen) {
+        // Find last assistant message
+        for (let i = history.length - 1; i >= 0; i--) {
+          const msg = history[i];
+          if (msg?.role === 'assistant' && msg?.content?.trim()) {
+            return msg.content.trim();
+          }
+        }
+      }
+    } catch {
+      // Continue polling
     }
   }
+  
   return null;
 }
 
@@ -83,56 +154,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'name is required', fallback: FALLBACK_PRD }, { status: 400 });
     }
 
-    const client = getOpenClawClient();
-    if (!client.isConnected()) {
-      try {
-        await client.connect();
-      } catch {
-        return NextResponse.json({ suggestedProgram: FALLBACK_PRD, source: 'fallback:gateway-unavailable' });
-      }
-    }
-
-    // 1) Prefer DB-known main session
-    const dbMain = queryOne<{ openclaw_session_id: string }>(
-      `SELECT openclaw_session_id FROM openclaw_sessions
-       WHERE session_type = 'main' AND status != 'completed'
-       ORDER BY updated_at DESC LIMIT 1`
-    );
-
-    // 2) Fallback to live sessions
-    const sessions = await client.listSessions().catch(() => [] as OpenClawSessionInfo[]);
-    const mainCandidate = sessions.find((s) => s.id === 'main')
-      || sessions.find((s) => (s.channel || '').toLowerCase() === 'main')
-      || sessions[0];
-
-    const sessionId = dbMain?.openclaw_session_id || mainCandidate?.id;
+    // Find main session
+    const sessionId = await findMainSession();
     if (!sessionId) {
-      return NextResponse.json({ suggestedProgram: FALLBACK_PRD, source: 'fallback:no-session' });
+      return NextResponse.json({ 
+        suggestedProgram: FALLBACK_PRD, 
+        source: 'fallback:no-session',
+        error: 'No Gateway session available'
+      });
     }
-
-    const beforeHistory = await client.getSessionHistory(sessionId).catch(() => []);
-    const beforeLen = Array.isArray(beforeHistory) ? beforeHistory.length : 0;
 
     const prompt = buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
-    await client.sendMessage(sessionId, prompt);
-
-    // Wait up to 2 minutes, poll every 3s
-    const timeoutAt = Date.now() + 2 * 60 * 1000;
-    while (Date.now() < timeoutAt) {
-      await sleep(3000);
-      const history = await client.getSessionHistory(sessionId).catch(() => []);
-      const arr = Array.isArray(history) ? history : [];
-      if (arr.length > beforeLen) {
-        const maybe = extractLastAssistant(arr);
-        if (maybe) {
-          return NextResponse.json({ suggestedProgram: maybe, source: 'gateway-main' });
-        }
-      }
+    
+    // Send and wait for response (2 minute timeout)
+    const response = await sendMessageAndWait(sessionId, prompt, 2 * 60 * 1000);
+    
+    if (response) {
+      return NextResponse.json({ 
+        suggestedProgram: response, 
+        source: 'gateway-main' 
+      });
     }
 
-    return NextResponse.json({ suggestedProgram: FALLBACK_PRD, source: 'fallback:timeout' });
+    return NextResponse.json({ 
+      suggestedProgram: FALLBACK_PRD, 
+      source: 'fallback:timeout',
+      error: 'Gateway timeout - no response within 2 minutes'
+    });
+    
   } catch (error) {
     console.error('Failed to generate autopilot product program:', error);
-    return NextResponse.json({ suggestedProgram: FALLBACK_PRD, source: 'fallback:error' });
+    return NextResponse.json({ 
+      suggestedProgram: FALLBACK_PRD, 
+      source: 'fallback:error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
