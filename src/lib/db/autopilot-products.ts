@@ -23,6 +23,7 @@ export interface AutopilotProduct {
   executive_summary: string | null;
   additional_prompt: string | null;
   technical_architecture: string | null;
+  additional_prompt_arch: string | null;
   implementation_roadmap: string | null;
   build_mode: string | null;
   default_branch: string | null;
@@ -64,6 +65,7 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
     executive_summary: null,
     additional_prompt: null,
     technical_architecture: null,
+    additional_prompt_arch: null,
     implementation_roadmap: null,
     build_mode: input.build_mode ?? 'plan_first',
     default_branch: input.default_branch ?? 'main',

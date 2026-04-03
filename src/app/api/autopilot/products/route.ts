@@ -29,6 +29,7 @@ function ensureTable() {
         executive_summary TEXT,
         additional_prompt TEXT,
         technical_architecture TEXT,
+        additional_prompt_arch TEXT,
         implementation_roadmap TEXT,
         build_mode TEXT DEFAULT 'plan_first',
         default_branch TEXT DEFAULT 'main',
@@ -68,6 +69,11 @@ function ensureTable() {
     }
     try {
       run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt TEXT`);
+    } catch (e) {
+      // Column likely exists, ignore
+    }
+    try {
+      run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt_arch TEXT`);
     } catch (e) {
       // Column likely exists, ignore
     }
