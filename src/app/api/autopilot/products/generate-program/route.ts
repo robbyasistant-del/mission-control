@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOpenClawClient } from '@/lib/openclaw/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,93 +60,9 @@ Product info:
 - Local Deploy path: ${input.local_deploy_path || ''}`;
 }
 
-// Call Gateway REST API directly
-async function gatewayCall<T>(method: string, params?: Record<string, unknown>): Promise<T> {
-  const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://127.0.0.1:18789';
-  const token = process.env.OPENCLAW_GATEWAY_TOKEN || '';
-  
-  const response = await fetch(`${gatewayUrl}/api/v1/rpc`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      type: 'req',
-      id: crypto.randomUUID(),
-      method,
-      params,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Gateway error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  if (data.ok === false && data.error) {
-    throw new Error(data.error.message || 'Gateway RPC error');
-  }
-  return data.payload as T;
-}
-
-async function findMainSession(): Promise<string | null> {
-  try {
-    // Try to find main session via RPC
-    const sessions = await gatewayCall<Array<{ id: string; channel?: string; peer?: string }>>('sessions.list');
-    
-    // Look for main session
-    const main = sessions.find((s) => s.id === 'main') 
-      || sessions.find((s) => (s.channel || '').toLowerCase() === 'main')
-      || sessions[0];
-    
-    return main?.id || null;
-  } catch {
-    return null;
-  }
-}
-
-async function sendMessageAndWait(sessionId: string, content: string, timeoutMs: number): Promise<string | null> {
-  // Get history before sending
-  const beforeHistory = await gatewayCall<Array<{ role?: string; content?: string }>>('sessions.history', { 
-    session_id: sessionId 
-  });
-  const beforeLen = beforeHistory?.length || 0;
-
-  // Send message
-  await gatewayCall('sessions.send', { 
-    session_id: sessionId, 
-    content 
-  });
-
-  // Poll for response
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeoutMs) {
-    await sleep(3000);
-    
-    try {
-      const history = await gatewayCall<Array<{ role?: string; content?: string }>>('sessions.history', { 
-        session_id: sessionId 
-      });
-      
-      if (history && history.length > beforeLen) {
-        // Find last assistant message
-        for (let i = history.length - 1; i >= 0; i--) {
-          const msg = history[i];
-          if (msg?.role === 'assistant' && msg?.content?.trim()) {
-            return msg.content.trim();
-          }
-        }
-      }
-    } catch {
-      // Continue polling
-    }
-  }
-  
-  return null;
-}
-
 export async function POST(request: NextRequest) {
+  const debug: string[] = [];
+  
   try {
     const body = await request.json();
     const { name, description, repo_url, live_url, source_code_path, local_deploy_path } = body || {};
@@ -154,40 +71,151 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'name is required', fallback: FALLBACK_PRD }, { status: 400 });
     }
 
-    // Find main session
-    const sessionId = await findMainSession();
-    if (!sessionId) {
+    debug.push(`1. Starting generation for product: ${name}`);
+
+    // Get OpenClaw client
+    const client = getOpenClawClient();
+    debug.push(`2. Got OpenClaw client instance`);
+
+    // Check connection and connect if needed
+    if (!client.isConnected()) {
+      debug.push(`3. Client not connected, attempting connect...`);
+      try {
+        await client.connect();
+        debug.push(`4. Connected successfully`);
+      } catch (connErr) {
+        debug.push(`4. Connection failed: ${connErr instanceof Error ? connErr.message : String(connErr)}`);
+        return NextResponse.json({ 
+          suggestedProgram: FALLBACK_PRD, 
+          source: 'fallback:gateway-unavailable',
+          error: 'Cannot connect to Gateway',
+          debug
+        });
+      }
+    } else {
+      debug.push(`3. Client already connected`);
+    }
+
+    // List sessions to find main
+    debug.push(`5. Listing sessions...`);
+    let sessions;
+    try {
+      sessions = await client.listSessions();
+      debug.push(`6. Found ${sessions.length} sessions`);
+    } catch (listErr) {
+      debug.push(`6. Failed to list sessions: ${listErr instanceof Error ? listErr.message : String(listErr)}`);
       return NextResponse.json({ 
         suggestedProgram: FALLBACK_PRD, 
-        source: 'fallback:no-session',
-        error: 'No Gateway session available'
+        source: 'fallback:list-sessions-failed',
+        error: 'Failed to list Gateway sessions',
+        debug
       });
     }
 
-    const prompt = buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
-    
-    // Send and wait for response (2 minute timeout)
-    const response = await sendMessageAndWait(sessionId, prompt, 2 * 60 * 1000);
-    
-    if (response) {
+    if (!sessions || sessions.length === 0) {
+      debug.push(`7. No sessions found`);
       return NextResponse.json({ 
-        suggestedProgram: response, 
-        source: 'gateway-main' 
+        suggestedProgram: FALLBACK_PRD, 
+        source: 'fallback:no-sessions',
+        error: 'No Gateway sessions available',
+        debug
       });
     }
 
+    // Find main session or use first available
+    const mainSession = sessions.find((s) => s.id === 'main') 
+      || sessions.find((s) => (s.channel || '').toLowerCase() === 'main')
+      || sessions[0];
+    
+    const sessionId = mainSession.id;
+    debug.push(`7. Using session: ${sessionId} (channel: ${mainSession.channel || 'unknown'})`);
+
+    // Get history before sending
+    let beforeHistory;
+    try {
+      beforeHistory = await client.getSessionHistory(sessionId);
+      debug.push(`8. Got history, length: ${beforeHistory.length}`);
+    } catch (histErr) {
+      debug.push(`8. Failed to get history: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
+      return NextResponse.json({ 
+        suggestedProgram: FALLBACK_PRD, 
+        source: 'fallback:history-failed',
+        error: 'Failed to get session history',
+        debug
+      });
+    }
+    
+    const beforeLen = Array.isArray(beforeHistory) ? beforeHistory.length : 0;
+
+    // Send message
+    const prompt = buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
+    debug.push(`9. Sending prompt (${prompt.length} chars)...`);
+    
+    try {
+      await client.sendMessage(sessionId, prompt);
+      debug.push(`10. Message sent successfully`);
+    } catch (sendErr) {
+      debug.push(`10. Failed to send message: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`);
+      return NextResponse.json({ 
+        suggestedProgram: FALLBACK_PRD, 
+        source: 'fallback:send-failed',
+        error: 'Failed to send message to Gateway',
+        debug
+      });
+    }
+
+    // Poll for response (2 minute timeout)
+    debug.push(`11. Starting poll loop (2 min timeout)...`);
+    const timeoutMs = 2 * 60 * 1000;
+    const startTime = Date.now();
+    let pollCount = 0;
+    
+    while (Date.now() - startTime < timeoutMs) {
+      await sleep(3000);
+      pollCount++;
+      
+      try {
+        const history = await client.getSessionHistory(sessionId);
+        const arr = Array.isArray(history) ? (history as Array<{ role?: string; content?: string }>) : [];
+
+        if (arr.length > beforeLen) {
+          debug.push(`12. Poll #${pollCount}: History grew from ${beforeLen} to ${arr.length}`);
+
+          // Find last assistant message
+          for (let i = arr.length - 1; i >= 0; i--) {
+            const msg = arr[i];
+            if (msg?.role === 'assistant' && typeof msg.content === 'string' && msg.content.trim()) {
+              debug.push(`13. Found assistant response at index ${i}`);
+              return NextResponse.json({
+                suggestedProgram: msg.content.trim(),
+                source: 'gateway-main',
+                debug
+              });
+            }
+          }
+        }
+      } catch (pollErr) {
+        debug.push(`12. Poll #${pollCount} error: ${pollErr instanceof Error ? pollErr.message : String(pollErr)}`);
+      }
+    }
+
+    debug.push(`14. Timeout after ${pollCount} polls`);
     return NextResponse.json({ 
       suggestedProgram: FALLBACK_PRD, 
       source: 'fallback:timeout',
-      error: 'Gateway timeout - no response within 2 minutes'
+      error: 'Gateway timeout - no response within 2 minutes',
+      debug
     });
     
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    debug.push(`ERROR: ${errorMsg}`);
     console.error('Failed to generate autopilot product program:', error);
     return NextResponse.json({ 
       suggestedProgram: FALLBACK_PRD, 
       source: 'fallback:error',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMsg,
+      debug
     });
   }
 }
