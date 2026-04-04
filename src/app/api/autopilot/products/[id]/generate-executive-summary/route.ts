@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { complete } from '@/lib/autopilot/llm';
 import { getAutopilotProduct, updateAutopilotProduct } from '@/lib/db/autopilot-products';
+import { getAutopilotPrompt, type PromptKey } from '@/lib/db/autopilot-prompts';
 import { run } from '@/lib/db';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 function ensureAutopilotColumns() {
   try { run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt TEXT`); } catch {}
@@ -11,7 +14,61 @@ function ensureAutopilotColumns() {
 
 export const dynamic = 'force-dynamic';
 
-function buildExecutiveSummaryPrompt(productProgram: string, additionalPrompt?: string | null): string {
+const PROMPT_KEY: PromptKey = 'executive-summary';
+
+async function getPromptAndConfig(productId: string) {
+  // 1. Try to get from DB
+  const dbPrompt = getAutopilotPrompt(productId, PROMPT_KEY);
+  if (dbPrompt && dbPrompt.prompt_text) {
+    return {
+      prompt_text: dbPrompt.prompt_text,
+      model: dbPrompt.model,
+      temperature: dbPrompt.temperature,
+      max_tokens: dbPrompt.max_tokens,
+      timeout_ms: dbPrompt.timeout_ms,
+      system_prompt: dbPrompt.system_prompt,
+    };
+  }
+  
+  // 2. Fallback: read from file
+  try {
+    const filepath = path.join(process.cwd(), 'prompts', '02-executive-summary.md');
+    const content = await fs.readFile(filepath, 'utf-8');
+    
+    // Parse prompt text
+    const promptMatch = content.match(/## Prompt Template\s*\n\s*```(?:\w*\n|\n)?([\s\S]*?)```/);
+    const promptText = promptMatch ? promptMatch[1].trim() : '';
+    
+    // Parse config
+    const modelMatch = content.match(/- \*\*Model\*\*:\s*`?([^`\n]+)`?/);
+    const tempMatch = content.match(/- \*\*Temperature\*\*:\s*`?([^`\n]+)`?/);
+    const tokensMatch = content.match(/- \*\*Max Tokens\*\*:\s*`?([^`\n]+)`?/);
+    const timeoutMatch = content.match(/- \*\*Timeout\*\*:\s*`?([^`\n\(]+)`?/);
+    const systemMatch = content.match(/- \*\*System Prompt\*\*:\s*`?([^`\n]+)`?/);
+    
+    return {
+      prompt_text: promptText,
+      model: modelMatch ? modelMatch[1].trim() : 'anthropic/claude-sonnet-4-6',
+      temperature: tempMatch ? parseFloat(tempMatch[1]) : 0.7,
+      max_tokens: tokensMatch ? parseInt(tokensMatch[1]) : 4096,
+      timeout_ms: timeoutMatch ? parseInt(timeoutMatch[1]) : 300000,
+      system_prompt: systemMatch ? systemMatch[1].trim() : 'You are a concise product strategist. You create brief, bullet-point executive summaries. You NEVER use paragraphs when bullet points suffice. You are strictly limited to 5 bullets per section. You prioritize clarity and brevity over verbosity.',
+    };
+  } catch (error) {
+    console.error('Failed to read prompt file:', error);
+    // 3. Final fallback: hardcoded defaults
+    return {
+      prompt_text: '',
+      model: 'anthropic/claude-sonnet-4-6',
+      temperature: 0.7,
+      max_tokens: 4096,
+      timeout_ms: 300000,
+      system_prompt: 'You are a concise product strategist. You create brief, bullet-point executive summaries. You NEVER use paragraphs when bullet points suffice. You are strictly limited to 5 bullets per section. You prioritize clarity and brevity over verbosity.',
+    };
+  }
+}
+
+function buildFallbackPrompt(productProgram: string, additionalPrompt?: string | null): string {
   const basePrompt = `You are an expert product strategist. Create a CONCISE Executive Summary based on the PRD below.
 
 ## Product Requirements Document (PRD):
@@ -129,14 +186,24 @@ export async function POST(
     }
 
     const additionalPrompt = body.additional_prompt ?? product.additional_prompt;
-    const prompt = buildExecutiveSummaryPrompt(product.product_program, additionalPrompt);
+    
+    // Get prompt and config from DB or file
+    const config = await getPromptAndConfig(params.id);
+    
+    // Build the final prompt
+    const promptText = config.prompt_text || buildFallbackPrompt(product.product_program, additionalPrompt);
+    
+    // Replace variables in prompt text if they exist
+    const finalPrompt = promptText
+      .replace(/\{\{product_program\}\}/g, product.product_program || '')
+      .replace(/\{\{additional_prompt\}\}/g, additionalPrompt || '');
 
-    const result = await complete(prompt, {
-      model: 'openclaw',
-      systemPrompt: 'You are a concise product strategist. You create brief, bullet-point executive summaries. You NEVER use paragraphs when bullet points suffice. You are strictly limited to 5 bullets per section. You prioritize clarity and brevity over verbosity.',
-      temperature: 0.7,
-      maxTokens: 4096,
-      timeoutMs: 300_000,
+    const result = await complete(finalPrompt, {
+      model: config.model,
+      systemPrompt: config.system_prompt,
+      temperature: config.temperature,
+      maxTokens: config.max_tokens,
+      timeoutMs: config.timeout_ms,
       signal: request.signal,
     });
 
