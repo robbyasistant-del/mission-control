@@ -38,7 +38,7 @@ interface AutopilotProduct {
   created_at: string;
 }
 
-type Tab = 'basics' | 'program' | 'workflow' | 'watchdog' | 'activity';
+type Tab = 'basics' | 'program' | 'workflow' | 'watchdog';
 type WorkflowStep = 'program' | 'executive-summary' | 'technical-architecture' | 'implementation-roadmap' | 'sprints-tasks';
 
 const WORKFLOW_STEPS: { id: WorkflowStep; label: string; state: WorkflowState }[] = [
@@ -575,7 +575,6 @@ export default function AutopilotProductPage() {
     { id: 'program', label: 'Product Program', icon: <FileText className="w-4 h-4" /> },
     { id: 'workflow', label: 'Product Workflow', icon: <Workflow className="w-4 h-4" /> },
     { id: 'watchdog', label: 'Run Watchdog', icon: <Activity className="w-4 h-4" /> },
-    { id: 'activity', label: 'Activity', icon: <Activity className="w-4 h-4" /> },
   ];
 
   return (
@@ -1459,15 +1458,7 @@ export default function AutopilotProductPage() {
           </div>
         )}
 
-        {activeTab === 'activity' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-12 text-center">
-              <Activity className="w-12 h-12 mx-auto mb-4 text-mc-text-secondary" />
-              <h2 className="text-lg font-semibold text-mc-text mb-2">Activity Log</h2>
-              <p className="text-mc-text-secondary">Activity tracking coming soon.</p>
-            </div>
-          </div>
-        )}
+
       </main>
     </div>
   );
