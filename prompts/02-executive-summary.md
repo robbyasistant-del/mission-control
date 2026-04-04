@@ -1,7 +1,7 @@
 # Executive Summary Generation Prompt
 
 ## Model Configuration
-- **Model**: `anthropic/claude-sonnet-4-6`
+- **Model**: `openclaw`
 - **Temperature**: `0.7`
 - **Max Tokens**: `4096`
 - **Timeout**: `300000` (5 minutos)

@@ -48,7 +48,7 @@ async function getPromptAndConfig(productId: string) {
     
     return {
       prompt_text: promptText,
-      model: modelMatch ? modelMatch[1].trim() : 'anthropic/claude-sonnet-4-6',
+      model: modelMatch ? modelMatch[1].trim() : 'openclaw',
       temperature: tempMatch ? parseFloat(tempMatch[1]) : 0.7,
       max_tokens: tokensMatch ? parseInt(tokensMatch[1]) : 4096,
       timeout_ms: timeoutMatch ? parseInt(timeoutMatch[1]) : 300000,
@@ -59,7 +59,7 @@ async function getPromptAndConfig(productId: string) {
     // 3. Final fallback: hardcoded defaults
     return {
       prompt_text: '',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openclaw',
       temperature: 0.7,
       max_tokens: 4096,
       timeout_ms: 300000,
