@@ -399,17 +399,13 @@ async function buildTaskCreationContext(
 - Read and follow: TECHNICAL_ARCHITECTURE.md
 - Read and follow: DEVELOPER_RULES from IMPLEMENTATION_ROADMAP.md`);
 
-  // Instrucciones específicas de la tarea
-  parts.push(`## Task Details
+  // Nota: La descripción detallada se generará vía LLM
+  parts.push(`## Task Details (for LLM generation)
 Title: ${task.title}
-Description: ${task.description_text || 'No description'}
-Agent: ${task.agent_role}
-
-## Instructions
-- When moving to 'in progress', update status in database
-- When moving to 'verification', deploy, start and test functionality
-- When completed (moved to 'done'), update end timestamp and status
-- Ensure no errors in logs after deployment`);
+Agent Role: ${task.agent_role}
+Original Description: ${task.description_text || 'No description'}
+Deliverables: ${task.deliverables || 'N/A'}
+Quality Criteria: ${task.quality_criteria || 'N/A'}`);
 
   return parts.join('\n\n---\n\n');
 }
@@ -519,12 +515,20 @@ async function createRegressionTestingTask(
   const fullContext = `${context}\n\n## Regression Testing Instructions\nStop current services, compile/deploy/start, test full functionality (API/UI/Browser).\nCheck console logs and UI for errors. Fix any issues found iteratively until all tests pass.`;
 
   try {
+    // Resolver agente para regression testing
+    const assignedAgentFromSettings = settings.assigned_agents 
+      ? JSON.parse(settings.assigned_agents)[0]?.agent_id 
+      : undefined;
+    const regressionAgentId = assignedAgentFromSettings 
+      ? await resolveAgentId(assignedAgentFromSettings, product.workspace_id || undefined)
+      : undefined;
+
     const taskId = await createMissionControlTaskDirect({
       title,
       description: fullContext,
       status: 'assigned',
       priority: 'urgent',
-      assigned_agent_id: settings.assigned_agents ? JSON.parse(settings.assigned_agents)[0]?.agent_id : undefined,
+      assigned_agent_id: regressionAgentId,
       workspace_path: product.source_code_path || undefined,
       workspace_id: product.workspace_id || undefined,
     });
@@ -572,14 +576,31 @@ async function createMissionControlTask(
   context: string
 ): Promise<TaskCreationResult> {
   try {
+    // 1. Generar descripción vía LLM con timeout de 5 minutos
+    console.log(`[Watchdog] Generating task description via LLM for: ${autopilotTask.title}`);
+    const generatedDescription = await generateTaskDescriptionWithLLM(
+      autopilotTask,
+      context,
+      300000 // 5 minutos
+    );
+
+    // 2. Obtener el agent_id real desde la BD de agents
+    const agentId = await resolveAgentId(autopilotTask.agent_role, product.workspace_id || undefined);
+
     const taskId = await createMissionControlTaskDirect({
       title: autopilotTask.title,
-      description: `${autopilotTask.description_text || ''}\n\n${context}`,
+      description: generatedDescription,
       status: 'assigned',
       priority: 'urgent',
-      assigned_agent_id: autopilotTask.agent_role, // Using agent_role as identifier
+      assigned_agent_id: agentId,
       workspace_path: product.source_code_path || undefined,
       workspace_id: product.workspace_id || undefined,
+    });
+
+    // 3. Actualizar BD Autopilot
+    updateAutopilotTask(autopilotTask.id, { 
+      status: 'in_progress',
+      start_date: new Date().toISOString(),
     });
 
     return {
@@ -604,6 +625,175 @@ interface CreateTaskParams {
   assigned_agent_id?: string;
   workspace_path?: string;
   workspace_id?: string;
+}
+
+/**
+ * Genera la descripción de la tarea usando LLM via Gateway
+ * Timeout: 5 minutos (300000ms)
+ */
+async function generateTaskDescriptionWithLLM(
+  task: AutopilotTask,
+  context: string,
+  timeoutMs: number = 300000
+): Promise<string> {
+  const prompt = `You are a technical project manager. Create a comprehensive task description based on the following information.
+
+TASK TO IMPLEMENT:
+- Title: ${task.title}
+- Agent Role: ${task.agent_role}
+- Original Description: ${task.description_text || 'N/A'}
+- Deliverables: ${task.deliverables || 'N/A'}
+- Quality Criteria: ${task.quality_criteria || 'N/A'}
+
+CONTEXT:
+${context}
+
+INSTRUCTIONS:
+Create a detailed task description with the following sections:
+
+## User Story
+[Describe the feature from user perspective]
+
+## Functionality
+[Detailed description of what needs to be built]
+
+## Technical Requirements
+[Specific technical details, APIs, components needed]
+
+## Implementation Steps
+[Step-by-step guide for the developer]
+
+## Quality Checks / Acceptance Criteria
+[Specific tests and validations required]
+
+## Definition of Done
+[Clear conditions that must be met to mark this task as complete]
+- Code is written and tested
+- No errors in logs
+- Feature works as described
+- All quality checks pass
+
+## References
+- Read and follow: IMPLEMENTATION_ROADMAP.md
+- Read and follow: TECHNICAL_ARCHITECTURE.md  
+- Read and follow: DEVELOPER_RULES from IMPLEMENTATION_ROADMAP.md
+
+Be concise but thorough. The developer should have all information needed to complete this task successfully.`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // Llamar al Gateway LLM
+    const response = await fetch(`${process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333'}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENCLAW_GATEWAY_TOKEN || ''}`,
+      },
+      body: JSON.stringify({
+        model: process.env.WATCHDOG_LLM_MODEL || 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a technical project manager creating clear, actionable task descriptions for developers.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`LLM API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const generatedDescription = data.choices?.[0]?.message?.content;
+
+    if (!generatedDescription) {
+      throw new Error('No description generated');
+    }
+
+    // Agregar metadatos al inicio
+    const finalDescription = `# Task: ${task.title}
+**Agent:** ${task.agent_role}  
+**Generated:** ${new Date().toISOString()}
+
+---
+
+${generatedDescription}
+
+---
+
+## Original Context
+${context}`;
+
+    return finalDescription;
+
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Watchdog] LLM generation timed out after 5 minutes');
+      throw new Error('LLM generation timeout');
+    }
+    
+    console.error('[Watchdog] LLM generation failed:', error);
+    // Fallback: usar descripción original
+    return `# Task: ${task.title}
+**Agent:** ${task.agent_role}
+
+## Description
+${task.description_text || 'No description provided'}
+
+## Context
+${context}
+
+[Note: LLM generation failed, using fallback description]`;
+  }
+}
+
+/**
+ * Resuelve el agent_id real basado en agent_role del workspace
+ */
+async function resolveAgentId(agentRole: string, workspaceId?: string): Promise<string | undefined> {
+  try {
+    const db = getDb();
+    
+    // Buscar agente por role en el workspace
+    const agent = db.prepare(
+      `SELECT id FROM agents 
+       WHERE role = ? 
+       AND (workspace_id = ? OR workspace_id = 'default')
+       ORDER BY workspace_id = ? DESC
+       LIMIT 1`
+    ).get(agentRole, workspaceId || 'default', workspaceId || 'default') as { id: string } | undefined;
+
+    if (agent) {
+      console.log(`[Watchdog] Resolved agent_id: ${agent.id} for role: ${agentRole}`);
+      return agent.id;
+    }
+
+    // Si no se encuentra, intentar buscar por nombre similar
+    const agentByName = db.prepare(
+      `SELECT id FROM agents 
+       WHERE name LIKE ? 
+       AND (workspace_id = ? OR workspace_id = 'default')
+       LIMIT 1`
+    ).get(`%${agentRole}%`, workspaceId || 'default') as { id: string } | undefined;
+
+    if (agentByName) {
+      console.log(`[Watchdog] Resolved agent_id by name: ${agentByName.id} for role: ${agentRole}`);
+      return agentByName.id;
+    }
+
+    console.warn(`[Watchdog] No agent found for role: ${agentRole}, using role as identifier`);
+    return agentRole; // Fallback: usar el role como identifier
+
+  } catch (error) {
+    console.error(`[Watchdog] Failed to resolve agent_id:`, error);
+    return agentRole; // Fallback
+  }
 }
 
 /**
