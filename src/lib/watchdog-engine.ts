@@ -96,11 +96,19 @@ async function runWatchdogCycle(productId: string) {
     });
   }
 
-  // Schedule next run
-  const nextRunAt = calculateNextRun(settings.interval_seconds || 300);
+  // Schedule next run - update both DB and in-memory map
+  const intervalSeconds = settings.interval_seconds || 300;
+  const nextRunAt = calculateNextRun(intervalSeconds);
+  
   updateWatchdogSettings(productId, {
     next_run_at: nextRunAt.toISOString(),
   });
+
+  // Update in-memory map so SSE returns correct countdown
+  const watchdog = activeWatchdogs.get(productId);
+  if (watchdog) {
+    watchdog.nextRunAt = nextRunAt;
+  }
 }
 
 // Start watchdog for a product
