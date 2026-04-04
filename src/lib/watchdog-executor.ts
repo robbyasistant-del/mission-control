@@ -634,7 +634,7 @@ async function generateTaskDescriptionWithLLM(
     .replace('ws://', 'http://')
     .replace('wss://', 'https://');
   const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || '';
-  const model = process.env.WATCHDOG_LLM_MODEL || 'gpt-4o';
+  const model = process.env.WATCHDOG_LLM_MODEL || 'openclaw';
   
   console.log(`[Watchdog LLM] Starting generation for task: ${task.title}`);
   console.log(`[Watchdog LLM] Gateway URL: ${gatewayUrl}`);
