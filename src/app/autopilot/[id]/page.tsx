@@ -1164,40 +1164,23 @@ export default function AutopilotProductPage() {
                   </div>
 
                   {/* Current Task */}
-                  <div className="bg-mc-bg rounded-lg p-4 border border-mc-border">
-                    <p className="text-xs text-mc-text-secondary font-medium mb-3">Current Task</p>
+                  <div className="bg-mc-bg rounded-lg p-3 border border-mc-border">
+                    <p className="text-xs text-mc-text-secondary font-medium mb-2">Current Task</p>
                     {watchdogCurrentTask ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <tbody>
-                            <tr className="border-b border-mc-border/50">
-                              <td className="py-2 text-mc-text-secondary w-20">Agent</td>
-                              <td className="py-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-mc-accent/10 text-mc-accent">
-                                  {watchdogCurrentTask.agent_role}
-                                </span>
-                              </td>
-                            </tr>
-                            <tr className="border-b border-mc-border/50">
-                              <td className="py-2 text-mc-text-secondary">Task</td>
-                              <td className="py-2 text-mc-text">{watchdogCurrentTask.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-2 text-mc-text-secondary">Status</td>
-                              <td className="py-2">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                  watchdogCurrentTask.status === 'done' ? 'bg-green-500/20 text-green-400' :
-                                  watchdogCurrentTask.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
-                                  watchdogCurrentTask.status === 'blocked' ? 'bg-red-500/20 text-red-400' :
-                                  watchdogCurrentTask.status === 'testing' ? 'bg-purple-500/20 text-purple-400' :
-                                  'bg-yellow-500/20 text-yellow-400'
-                                }`}>
-                                  {watchdogCurrentTask.status}
-                                </span>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-mc-accent/10 text-mc-accent">
+                          {watchdogCurrentTask.agent_role}
+                        </span>
+                        <span className="text-mc-text truncate flex-1">{watchdogCurrentTask.title}</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          watchdogCurrentTask.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                          watchdogCurrentTask.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
+                          watchdogCurrentTask.status === 'blocked' ? 'bg-red-500/20 text-red-400' :
+                          watchdogCurrentTask.status === 'testing' ? 'bg-purple-500/20 text-purple-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {watchdogCurrentTask.status}
+                        </span>
                       </div>
                     ) : (
                       <p className="text-sm text-mc-text-secondary">No task in progress</p>
@@ -1205,34 +1188,17 @@ export default function AutopilotProductPage() {
                   </div>
 
                   {/* Next Task */}
-                  <div className="bg-mc-bg rounded-lg p-4 border border-mc-border">
-                    <p className="text-xs text-mc-text-secondary font-medium mb-3">Next Task</p>
+                  <div className="bg-mc-bg rounded-lg p-3 border border-mc-border">
+                    <p className="text-xs text-mc-text-secondary font-medium mb-2">Next Task</p>
                     {watchdogNextTask ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <tbody>
-                            <tr className="border-b border-mc-border/50">
-                              <td className="py-2 text-mc-text-secondary w-20">Agent</td>
-                              <td className="py-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-mc-accent/10 text-mc-accent">
-                                  {watchdogNextTask.agent_role}
-                                </span>
-                              </td>
-                            </tr>
-                            <tr className="border-b border-mc-border/50">
-                              <td className="py-2 text-mc-text-secondary">Task</td>
-                              <td className="py-2 text-mc-text">{watchdogNextTask.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="py-2 text-mc-text-secondary">Status</td>
-                              <td className="py-2">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
-                                  {watchdogNextTask.status}
-                                </span>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-mc-accent/10 text-mc-accent">
+                          {watchdogNextTask.agent_role}
+                        </span>
+                        <span className="text-mc-text truncate flex-1">{watchdogNextTask.title}</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                          {watchdogNextTask.status}
+                        </span>
                       </div>
                     ) : (
                       <p className="text-sm text-mc-text-secondary">No pending tasks</p>
