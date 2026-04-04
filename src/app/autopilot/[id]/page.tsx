@@ -98,19 +98,15 @@ const PROMPT_KEYS = [
   { key: 'technical-architecture', label: 'Technical Architecture', description: 'Generates technical architecture documentation' },
   { key: 'implementation-roadmap', label: 'Implementation Roadmap', description: 'Creates detailed sprint-based implementation roadmap' },
   { key: 'watchdog-task-description', label: 'Watchdog Task Description', description: 'Generates task descriptions when watchdog creates tasks' },
-  { key: 'research-cycle', label: 'Research Cycle', description: 'Analyzes product for improvement opportunities (Autopilot Classic)' },
-  { key: 'ideation-cycle', label: 'Ideation Cycle', description: 'Generates feature ideas based on research (Autopilot Classic)' },
 ] as const;
 
 type PromptKey = typeof PROMPT_KEYS[number]['key'];
 
 // Prompts Tab Component
-function PromptsTab({ productId }: { productId: string }) {
-  const [prompts, setPrompts] = useState<Record<string, any>>({});
+function PromptsTab() {
   const [activePromptKey, setActivePromptKey] = useState<PromptKey>('product-program');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -125,43 +121,30 @@ function PromptsTab({ productId }: { productId: string }) {
     is_enabled: true,
   });
 
-  // Load prompts on mount
+  // Load prompt from file when active prompt changes
   useEffect(() => {
-    loadPrompts();
-  }, [productId]);
+    loadPromptFromFile(activePromptKey);
+  }, [activePromptKey]);
 
-  // Update form when active prompt changes
-  useEffect(() => {
-    const prompt = prompts[activePromptKey];
-    if (prompt) {
-      setForm({
-        prompt_text: prompt.prompt_text || '',
-        model: prompt.model || 'openclaw',
-        temperature: prompt.temperature ?? 0.7,
-        max_tokens: prompt.max_tokens || 4096,
-        timeout_ms: prompt.timeout_ms || 300000,
-        system_prompt: prompt.system_prompt || '',
-        is_enabled: prompt.is_enabled !== false,
-      });
-    }
-  }, [activePromptKey, prompts]);
-
-  const loadPrompts = async () => {
+  const loadPromptFromFile = async (key: PromptKey) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/autopilot/products/${productId}/prompts`);
-      if (!res.ok) throw new Error('Failed to load prompts');
+      const res = await fetch(`/api/prompts/${key}`);
+      if (!res.ok) throw new Error('Failed to load prompt from file');
       const data = await res.json();
       
-      // Convert array to record
-      const promptsRecord: Record<string, any> = {};
-      data.prompts.forEach((p: any) => {
-        promptsRecord[p.prompt_key] = p;
+      setForm({
+        prompt_text: data.prompt_text || '',
+        model: data.config?.model || 'openclaw',
+        temperature: data.config?.temperature ?? 0.7,
+        max_tokens: data.config?.max_tokens || 4096,
+        timeout_ms: data.config?.timeout_ms || 300000,
+        system_prompt: data.config?.system_prompt || '',
+        is_enabled: true,
       });
-      setPrompts(promptsRecord);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load prompts');
+      setError(err instanceof Error ? err.message : 'Failed to load prompt');
     } finally {
       setLoading(false);
     }
@@ -173,24 +156,17 @@ function PromptsTab({ productId }: { productId: string }) {
       setError(null);
       setSuccess(null);
       
-      const res = await fetch(`/api/autopilot/products/${productId}/prompts`, {
+      const res = await fetch(`/api/prompts/${activePromptKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt_key: activePromptKey,
-          ...form,
+          prompt_text: form.prompt_text,
         }),
       });
       
       if (!res.ok) throw new Error('Failed to save prompt');
-      const data = await res.json();
       
-      // Update local state
-      setPrompts(prev => ({
-        ...prev,
-        [activePromptKey]: data.prompt,
-      }));
-      setSuccess('Prompt saved successfully');
+      setSuccess('Prompt saved to file successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save prompt');
@@ -199,35 +175,11 @@ function PromptsTab({ productId }: { productId: string }) {
     }
   };
 
-  const resetToDefault = async () => {
-    if (!confirm('Reset this prompt to default? All changes will be lost.')) return;
-    
-    try {
-      setResetting(true);
-      setError(null);
-      setSuccess(null);
-      
-      const res = await fetch(`/api/autopilot/products/${productId}/prompts/reset`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt_key: activePromptKey }),
-      });
-      
-      if (!res.ok) throw new Error('Failed to reset prompt');
-      const data = await res.json();
-      
-      // Update local state
-      setPrompts(prev => ({
-        ...prev,
-        [activePromptKey]: data.prompt,
-      }));
-      setSuccess('Prompt reset to default');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset prompt');
-    } finally {
-      setResetting(false);
-    }
+  const reloadFromFile = async () => {
+    if (!confirm('Reload from file? Unsaved changes will be lost.')) return;
+    await loadPromptFromFile(activePromptKey);
+    setSuccess('Reloaded from file');
+    setTimeout(() => setSuccess(null), 3000);
   };
 
   const activePromptInfo = PROMPT_KEYS.find(p => p.key === activePromptKey);
@@ -246,9 +198,7 @@ function PromptsTab({ productId }: { productId: string }) {
       <div className="lg:col-span-1 space-y-2">
         <h3 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide mb-4">LLM Prompts</h3>
         {PROMPT_KEYS.map((prompt) => {
-          const promptData = prompts[prompt.key];
           const isActive = activePromptKey === prompt.key;
-          const isEnabled = promptData?.is_enabled !== false;
           
           return (
             <button
@@ -261,13 +211,13 @@ function PromptsTab({ productId }: { productId: string }) {
               }`}
             >
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-green-400' : 'bg-gray-400'}`} />
+                <div className="w-2 h-2 rounded-full bg-green-400" />
                 <span className="font-medium text-sm">{prompt.label}</span>
               </div>
               <p className="text-xs text-mc-text-secondary mt-1 line-clamp-2">{prompt.description}</p>
             </button>
           );
-        })}
+        })};
       </div>
 
       {/* Right content - Prompt editor */}
@@ -286,12 +236,12 @@ function PromptsTab({ productId }: { productId: string }) {
               </span>
             )}
             <button
-              onClick={resetToDefault}
-              disabled={resetting}
+              onClick={reloadFromFile}
+              disabled={loading}
               className="flex items-center gap-2 px-3 py-2 text-sm text-mc-text-secondary hover:text-mc-text bg-mc-bg-secondary hover:bg-mc-border border border-mc-border rounded-lg transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4" />
-              {resetting ? 'Resetting...' : 'Reset to Default'}
+              {loading ? 'Reloading...' : 'Reload from File'}
             </button>
             <button
               onClick={savePrompt}
@@ -385,6 +335,21 @@ function PromptsTab({ productId }: { productId: string }) {
               placeholder="Optional system prompt to set the behavior context..."
             />
             <p className="text-xs text-mc-text-secondary mt-1">Defines the AI&apos;s role and behavior</p>
+          </div>
+
+          {/* Info Box */}
+          <div className="bg-mc-bg rounded-lg p-4 border border-mc-border space-y-2">
+            <h4 className="text-sm font-medium text-mc-text">About These Settings</h4>
+            <div className="space-y-1">
+              <p className="text-xs text-mc-text-secondary">
+                <strong className="text-mc-text">System Prompt:</strong> Sets the AI&apos;s behavior and role context before the main prompt. 
+                Think of it as the &quot;personality&quot; or &quot;job description&quot; for the AI during this conversation.
+              </p>
+              <p className="text-xs text-mc-text-secondary">
+                <strong className="text-mc-text">Enable this prompt:</strong> When checked, this prompt will be used for new generations. 
+                Uncheck to temporarily disable without deleting your work.
+              </p>
+            </div>
           </div>
 
           {/* Enabled toggle */}
@@ -1814,7 +1779,7 @@ export default function AutopilotProductPage() {
         )}
 
         {activeTab === 'prompts' && (
-          <PromptsTab productId={product.id} />
+          <PromptsTab />
         )}
 
       </main>
