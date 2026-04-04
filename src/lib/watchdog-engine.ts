@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db';
 import { addWatchdogLog, getOrCreateWatchdogSettings, updateWatchdogSettings } from '@/lib/db/autopilot-watchdog';
+import { executeWatchdogCycle as executeFullWatchdogCycle } from '@/lib/watchdog-executor';
 
 interface WatchdogInstance {
   intervalId: ReturnType<typeof setInterval>;
@@ -15,22 +16,7 @@ function calculateNextRun(intervalSeconds: number): Date {
   return new Date(Date.now() + intervalSeconds * 1000);
 }
 
-// The actual watchdog execution (empty for now)
-async function executeWatchdog(productId: string): Promise<{
-  success: boolean;
-  message: string;
-  details?: string;
-}> {
-  // TODO: Implement actual watchdog logic
-  // For now, just return success
-  return {
-    success: true,
-    message: 'Watchdog cycle completed (placeholder)',
-    details: 'Execution logic not yet implemented',
-  };
-}
-
-// Run a single watchdog cycle - logs only the result (like a healthcheck)
+// Run a single watchdog cycle using the full executor
 async function runWatchdogCycle(productId: string) {
   const settings = getOrCreateWatchdogSettings(productId);
   
@@ -39,49 +25,25 @@ async function runWatchdogCycle(productId: string) {
     return;
   }
 
-  const startTime = Date.now();
+  // Execute full watchdog logic
+  const result = await executeFullWatchdogCycle(productId);
 
-  try {
-    const result = await executeWatchdog(productId);
-    const duration = Date.now() - startTime;
+  // Log the result
+  addWatchdogLog(productId, {
+    execution_type: 'cycle',
+    status: result.success ? 'success' : 'error',
+    message: result.message,
+    details: result.details,
+  });
 
-    // Single log entry with result (success or error)
-    addWatchdogLog(productId, {
-      execution_type: 'cycle',
-      status: result.success ? 'success' : 'error',
-      message: result.message,
-      details: result.details,
-      duration_ms: duration,
-    });
+  // Update last run info
+  updateWatchdogSettings(productId, {
+    last_run_at: new Date().toISOString(),
+    last_run_status: result.success ? 'success' : 'error',
+    last_run_summary: result.message,
+  });
 
-    // Update last run info
-    updateWatchdogSettings(productId, {
-      last_run_at: new Date().toISOString(),
-      last_run_status: result.success ? 'success' : 'error',
-      last_run_summary: result.message,
-    });
-
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    // Single log entry for exception
-    addWatchdogLog(productId, {
-      execution_type: 'cycle',
-      status: 'error',
-      message: 'Watchdog cycle failed',
-      details: errorMessage,
-      duration_ms: duration,
-    });
-
-    updateWatchdogSettings(productId, {
-      last_run_at: new Date().toISOString(),
-      last_run_status: 'error',
-      last_run_summary: errorMessage,
-    });
-  }
-
-  // Update next run time silently (no logging - this is internal scheduling)
+  // Update next run time silently
   const intervalSeconds = settings.interval_seconds || 300;
   const nextRunAt = calculateNextRun(intervalSeconds);
   
