@@ -34,56 +34,27 @@ export async function GET(
     const filepath = path.join(process.cwd(), 'prompts', filename);
     const content = await fs.readFile(filepath, 'utf-8');
     
-    // Parse the markdown file
-    const lines = content.split('\n');
-    const config: Record<string, string> = {};
-    let inPromptTemplate = false;
-    const promptTemplateLines: string[] = [];
+    // Parse config values
+    const modelMatch = content.match(/- \*\*Model\*\*:\s*`?([^`\n]+)`?/);
+    const tempMatch = content.match(/- \*\*Temperature\*\*:\s*`?([^`\n]+)`?/);
+    const tokensMatch = content.match(/- \*\*Max Tokens\*\*:\s*`?([^`\n]+)`?/);
+    const timeoutMatch = content.match(/- \*\*Timeout\*\*:\s*`?([^`\n\(]+)`?/);
+    const systemMatch = content.match(/- \*\*System Prompt\*\*:\s*`?([^`\n]+)`?/);
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Parse config from frontmatter-style section
-      if (line.startsWith('- **')) {
-        const match = line.match(/- \*\*(.+?)\*\*:\s*`?(.+?)`?$/);
-        if (match) {
-          const key = match[1].toLowerCase().replace(/\s+/g, '_');
-          config[key] = match[2];
-        }
-      }
-      
-      // Detect prompt template section
-      if (line.trim() === '## Prompt Template') {
-        inPromptTemplate = true;
-        continue;
-      }
-      
-      if (inPromptTemplate) {
-        // Check for code block markers (with or without language specifier)
-        if (line.trim().startsWith('```')) {
-          if (promptTemplateLines.length > 0) {
-            // End of code block
-            break;
-          }
-          // Start of code block, skip this line
-          continue;
-        }
-        promptTemplateLines.push(line);
-      }
-    }
-    
-    const promptText = promptTemplateLines.join('\n').trim();
+    // Extract content between ``` after ## Prompt Template
+    const promptMatch = content.match(/## Prompt Template\s*\n\s*```(?:\w*\n|\n)?([\s\S]*?)```/);
+    const promptText = promptMatch ? promptMatch[1].trim() : '';
     
     return NextResponse.json({
       key,
       content,
       prompt_text: promptText,
       config: {
-        model: config.model || 'openclaw',
-        temperature: parseFloat(config.temperature) || 0.7,
-        max_tokens: parseInt(config.max_tokens) || 4096,
-        timeout_ms: parseInt(config.timeout) || 300000,
-        system_prompt: config.system_prompt || '',
+        model: modelMatch ? modelMatch[1].trim() : 'openclaw',
+        temperature: tempMatch ? parseFloat(tempMatch[1]) : 0.7,
+        max_tokens: tokensMatch ? parseInt(tokensMatch[1]) : 4096,
+        timeout_ms: timeoutMatch ? parseInt(timeoutMatch[1]) : 300000,
+        system_prompt: systemMatch ? systemMatch[1].trim() : '',
       },
     });
   } catch (error) {
