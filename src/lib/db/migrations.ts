@@ -1643,6 +1643,62 @@ const migrations: Migration[] = [
 
       console.log('[Migration 029] autopilot_sprints and autopilot_tasks tables created');
     }
+  },
+  {
+    id: '030',
+    name: 'add_autopilot_watchdog',
+    up: (db) => {
+      console.log('[Migration 030] Adding autopilot watchdog tables...');
+
+      // Watchdog settings table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS autopilot_watchdog_settings (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          dashboard_url TEXT,
+          interval_seconds INTEGER DEFAULT 300,
+          auto_nudge_stuck INTEGER DEFAULT 1,
+          notify_new_task INTEGER DEFAULT 1,
+          new_task_priority TEXT DEFAULT 'normal',
+          notify_status_change INTEGER DEFAULT 0,
+          notify_statuses TEXT,
+          stop_on_sprint_finish INTEGER DEFAULT 0,
+          regression_testing_enabled INTEGER DEFAULT 1,
+          regression_trigger TEXT DEFAULT 'sprint finish',
+          assigned_agents TEXT,
+          is_running INTEGER DEFAULT 0,
+          next_run_at TEXT,
+          last_run_at TEXT,
+          last_run_status TEXT,
+          last_run_summary TEXT,
+          current_task_id TEXT,
+          next_task_id TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(product_id)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_watchdog_settings_product ON autopilot_watchdog_settings(product_id)`);
+
+      // Watchdog execution logs table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS autopilot_watchdog_logs (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          execution_type TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('success', 'error', 'warning', 'info')),
+          message TEXT NOT NULL,
+          details TEXT,
+          task_id TEXT,
+          duration_ms INTEGER,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_watchdog_logs_product ON autopilot_watchdog_logs(product_id, created_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_watchdog_logs_status ON autopilot_watchdog_logs(status)`);
+
+      console.log('[Migration 030] Autopilot watchdog tables created');
+    }
   }
 ];
 

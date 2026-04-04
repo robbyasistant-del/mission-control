@@ -37,7 +37,7 @@ interface AutopilotProduct {
   created_at: string;
 }
 
-type Tab = 'basics' | 'program' | 'workflow' | 'activity';
+type Tab = 'basics' | 'program' | 'workflow' | 'watchdog' | 'activity';
 type WorkflowStep = 'program' | 'executive-summary' | 'technical-architecture' | 'implementation-roadmap' | 'sprints-tasks';
 
 const WORKFLOW_STEPS: { id: WorkflowStep; label: string; state: WorkflowState }[] = [
@@ -111,6 +111,12 @@ export default function AutopilotProductPage() {
   const [archCountdown, setArchCountdown] = useState(300);
   const [roadmapCountdown, setRoadmapCountdown] = useState(300);
   const [sprints, setSprints] = useState<any[]>([]);
+  
+  // Watchdog state
+  const [watchdogSettings, setWatchdogSettings] = useState<any>(null);
+  const [watchdogLogs, setWatchdogLogs] = useState<any[]>([]);
+  const [watchdogCountdown, setWatchdogCountdown] = useState(0);
+  const [isWatchdogRunning, setIsWatchdogRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
@@ -396,6 +402,97 @@ export default function AutopilotProductPage() {
     }
   };
 
+  // Watchdog functions
+  const loadWatchdogSettings = async () => {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setWatchdogSettings(data.settings);
+        setIsWatchdogRunning(data.settings?.is_running || false);
+      }
+    } catch (err) {
+      console.error('Failed to load watchdog settings:', err);
+    }
+  };
+
+  const loadWatchdogLogs = async () => {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/logs?limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        setWatchdogLogs(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Failed to load watchdog logs:', err);
+    }
+  };
+
+  const toggleWatchdog = async () => {
+    if (!product) return;
+    const newState = !isWatchdogRunning;
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_running: newState }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWatchdogSettings(data.settings);
+        setIsWatchdogRunning(data.settings?.is_running || false);
+      }
+    } catch (err) {
+      console.error('Failed to toggle watchdog:', err);
+    }
+  };
+
+  const updateWatchdogSettings = async (settings: any) => {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWatchdogSettings(data.settings);
+      }
+    } catch (err) {
+      console.error('Failed to update watchdog settings:', err);
+    }
+  };
+
+  // Load watchdog data when tab is active
+  useEffect(() => {
+    if (activeTab === 'watchdog' && product) {
+      loadWatchdogSettings();
+      loadWatchdogLogs();
+    }
+  }, [activeTab, product]);
+
+  // Watchdog countdown timer
+  useEffect(() => {
+    if (!isWatchdogRunning || !watchdogSettings?.next_run_at) {
+      setWatchdogCountdown(0);
+      return;
+    }
+    
+    const updateCountdown = () => {
+      const nextRun = new Date(watchdogSettings.next_run_at).getTime();
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((nextRun - now) / 1000));
+      setWatchdogCountdown(diff);
+    };
+    
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [isWatchdogRunning, watchdogSettings?.next_run_at]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-mc-bg flex items-center justify-center">
@@ -424,6 +521,7 @@ export default function AutopilotProductPage() {
     { id: 'basics', label: 'Basic Info', icon: <Settings className="w-4 h-4" /> },
     { id: 'program', label: 'Product Program', icon: <FileText className="w-4 h-4" /> },
     { id: 'workflow', label: 'Product Workflow', icon: <Workflow className="w-4 h-4" /> },
+    { id: 'watchdog', label: 'Run Watchdog', icon: <Activity className="w-4 h-4" /> },
     { id: 'activity', label: 'Activity', icon: <Activity className="w-4 h-4" /> },
   ];
 
@@ -946,6 +1044,242 @@ export default function AutopilotProductPage() {
           </div>
         )}
 
+        {activeTab === 'watchdog' && (
+          <div className="h-[calc(100vh-180px)] flex gap-4">
+            {/* Left side - 70% - Watchdog Settings & Control */}
+            <div className="flex-[70] flex flex-col gap-4 overflow-auto">
+              {/* Watchdog Control Panel */}
+              <div className="bg-mc-bg-secondary rounded-lg border border-mc-border p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-mc-text">Watchdog Control</h2>
+                  <div className="flex items-center gap-3">
+                    {isWatchdogRunning && watchdogCountdown > 0 && (
+                      <span className="text-sm text-mc-text-secondary font-mono">
+                        Next: {Math.floor(watchdogCountdown / 60)}:{String(watchdogCountdown % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                    <button
+                      onClick={toggleWatchdog}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                        isWatchdogRunning
+                          ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                          : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                      }`}
+                    >
+                      {isWatchdogRunning ? (
+                        <><span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" /> STOP</>
+                      ) : (
+                        <><span className="w-2 h-2 rounded-full bg-green-400" /> PLAY</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Status indicators */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-mc-bg rounded-lg p-3 border border-mc-border">
+                    <p className="text-xs text-mc-text-secondary mb-1">Last Run</p>
+                    <div className="flex items-center gap-2">
+                      {watchdogSettings?.last_run_status ? (
+                        <>
+                          <span className={`w-2 h-2 rounded-full ${
+                            watchdogSettings.last_run_status === 'success' ? 'bg-green-400' :
+                            watchdogSettings.last_run_status === 'error' ? 'bg-red-400' :
+                            'bg-yellow-400'
+                          }`} />
+                          <span className="text-sm text-mc-text">
+                            {watchdogSettings.last_run_at 
+                              ? new Date(watchdogSettings.last_run_at).toLocaleString()
+                              : 'Never'}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm text-mc-text-secondary">No runs yet</span>
+                      )}
+                    </div>                    
+                    {watchdogSettings?.last_run_summary && (
+                      <p className="text-xs text-mc-text-secondary mt-1 truncate">{watchdogSettings.last_run_summary}</p>
+                    )}
+                  </div>
+
+                  <div className="bg-mc-bg rounded-lg p-3 border border-mc-border">
+                    <p className="text-xs text-mc-text-secondary mb-1">Current Task</p>
+                    <p className="text-sm text-mc-text truncate">
+                      {watchdogSettings?.current_task_id || 'None'}
+                    </p>
+                  </div>
+
+                  <div className="bg-mc-bg rounded-lg p-3 border border-mc-border">
+                    <p className="text-xs text-mc-text-secondary mb-1">Next Task</p>
+                    <p className="text-sm text-mc-text truncate">
+                      {watchdogSettings?.next_task_id || 'None'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Watchdog Settings */}
+              <div className="bg-mc-bg-secondary rounded-lg border border-mc-border p-4 flex-1">
+                <h3 className="text-md font-semibold text-mc-text mb-4">Watchdog Settings</h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Dashboard URL */}
+                  <div className="col-span-2">
+                    <label className="block text-xs text-mc-text-secondary mb-1">Dashboard URL</label>
+                    <input
+                      type="text"
+                      value={watchdogSettings?.dashboard_url || ''}
+                      onChange={(e) => updateWatchdogSettings({ dashboard_url: e.target.value })}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                    />
+                  </div>
+
+                  {/* Interval */}
+                  <div>
+                    <label className="block text-xs text-mc-text-secondary mb-1">Check Interval</label>
+                    <select
+                      value={watchdogSettings?.interval_seconds || 300}
+                      onChange={(e) => updateWatchdogSettings({ interval_seconds: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                    >
+                      <option value={30}>30 seconds</option>
+                      <option value={60}>1 minute</option>
+                      <option value={300}>5 minutes</option>
+                      <option value={900}>15 minutes</option>
+                      <option value={1800}>30 minutes</option>
+                      <option value={3600}>1 hour</option>
+                      <option value={7200}>2 hours</option>
+                      <option value={28800}>8 hours</option>
+                      <option value={86400}>24 hours</option>
+                    </select>
+                  </div>
+
+                  {/* New Task Priority */}
+                  <div>
+                    <label className="block text-xs text-mc-text-secondary mb-1">New Task Priority</label>
+                    <select
+                      value={watchdogSettings?.new_task_priority || 'normal'}
+                      onChange={(e) => updateWatchdogSettings({ new_task_priority: e.target.value })}
+                      className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                    >
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+
+                  {/* Checkboxes */}
+                  <div className="col-span-2 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchdogSettings?.auto_nudge_stuck !== false}
+                        onChange={(e) => updateWatchdogSettings({ auto_nudge_stuck: e.target.checked })}
+                        className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                      />
+                      <span className="text-sm text-mc-text">Auto-nudge stuck tasks</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchdogSettings?.notify_new_task !== false}
+                        onChange={(e) => updateWatchdogSettings({ notify_new_task: e.target.checked })}
+                        className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                      />
+                      <span className="text-sm text-mc-text">Notify on Telegram when new task created</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchdogSettings?.notify_status_change === true}
+                        onChange={(e) => updateWatchdogSettings({ notify_status_change: e.target.checked })}
+                        className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                      />
+                      <span className="text-sm text-mc-text">Notify on Telegram when task status changes to:</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchdogSettings?.stop_on_sprint_finish === true}
+                        onChange={(e) => updateWatchdogSettings({ stop_on_sprint_finish: e.target.checked })}
+                        className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                      />
+                      <span className="text-sm text-mc-text">Stop watchdog when sprint finishes</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={watchdogSettings?.regression_testing_enabled !== false}
+                        onChange={(e) => updateWatchdogSettings({ regression_testing_enabled: e.target.checked })}
+                        className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                      />
+                      <span className="text-sm text-mc-text">Create regression testing tasks when:</span>
+                      <select
+                        value={watchdogSettings?.regression_trigger || 'sprint finish'}
+                        onChange={(e) => updateWatchdogSettings({ regression_trigger: e.target.value })}
+                        className="ml-2 px-2 py-1 bg-mc-bg border border-mc-border rounded text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                      >
+                        <option value="sprint finish">Sprint finishes</option>
+                        <option value="each task done">Each task done</option>
+                        <option value="each 3 tasks done">Every 3 tasks done</option>
+                        <option value="each 2h">Every 2 hours</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right side - 30% - Event Log */}
+            <div className="flex-[30] bg-mc-bg-secondary rounded-lg border border-mc-border p-4 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-md font-semibold text-mc-text">Event Log</h3>
+                <button
+                  onClick={loadWatchdogLogs}
+                  className="text-xs text-mc-accent hover:underline"
+                >
+                  Refresh
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-auto space-y-2">
+                {watchdogLogs.length === 0 ? (
+                  <p className="text-sm text-mc-text-secondary text-center py-8">No events yet</p>
+                ) : (
+                  watchdogLogs.map((log: any) => (
+                    <div key={log.id} className="bg-mc-bg rounded p-2 border border-mc-border text-sm">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${
+                          log.status === 'success' ? 'bg-green-400' :
+                          log.status === 'error' ? 'bg-red-400' :
+                          log.status === 'warning' ? 'bg-yellow-400' :
+                          'bg-blue-400'
+                        }`} />
+                        <span className="text-xs text-mc-text-secondary">
+                          {new Date(log.created_at).toLocaleTimeString()}
+                        </span>
+                        <span className="text-xs text-mc-text-secondary bg-mc-bg-tertiary px-1 rounded">
+                          {log.execution_type}
+                        </span>
+                      </div>
+                      <p className="text-mc-text">{log.message}</p>
+                      {log.details && (
+                        <p className="text-xs text-mc-text-secondary mt-1">{log.details}</p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'activity' && (
           <div className="max-w-4xl mx-auto">
             <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-12 text-center">
@@ -954,7 +1288,7 @@ export default function AutopilotProductPage() {
               <p className="text-mc-text-secondary">Activity tracking coming soon.</p>
             </div>
           </div>
-        )}
+        )}],
       </main>
     </div>
   );

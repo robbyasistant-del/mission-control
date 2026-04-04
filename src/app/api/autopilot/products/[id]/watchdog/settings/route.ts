@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getOrCreateWatchdogSettings, updateWatchdogSettings } from '@/lib/db/autopilot-watchdog';
+import { getDb } from '@/lib/db';
+
+function ensureTable() {
+  try {
+    const db = getDb();
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS autopilot_watchdog_settings (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        dashboard_url TEXT,
+        interval_seconds INTEGER DEFAULT 300,
+        auto_nudge_stuck INTEGER DEFAULT 1,
+        notify_new_task INTEGER DEFAULT 1,
+        new_task_priority TEXT DEFAULT 'normal',
+        notify_status_change INTEGER DEFAULT 0,
+        notify_statuses TEXT,
+        stop_on_sprint_finish INTEGER DEFAULT 0,
+        regression_testing_enabled INTEGER DEFAULT 1,
+        regression_trigger TEXT DEFAULT 'sprint finish',
+        assigned_agents TEXT,
+        is_running INTEGER DEFAULT 0,
+        next_run_at TEXT,
+        last_run_at TEXT,
+        last_run_status TEXT,
+        last_run_summary TEXT,
+        current_task_id TEXT,
+        next_task_id TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(product_id)
+      )
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_watchdog_settings_product ON autopilot_watchdog_settings(product_id)`);
+  } catch (e) {
+    console.error('Failed to ensure watchdog table:', e);
+  }
+}
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    ensureTable();
+    const settings = getOrCreateWatchdogSettings(params.id);
+    return NextResponse.json({ settings });
+  } catch (error) {
+    console.error('Failed to get watchdog settings:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    ensureTable();
+    const body = await request.json().catch(() => ({}));
+    
+    const settings = updateWatchdogSettings(params.id, {
+      dashboard_url: body.dashboard_url,
+      interval_seconds: body.interval_seconds,
+      auto_nudge_stuck: body.auto_nudge_stuck,
+      notify_new_task: body.notify_new_task,
+      new_task_priority: body.new_task_priority,
+      notify_status_change: body.notify_status_change,
+      notify_statuses: body.notify_statuses,
+      stop_on_sprint_finish: body.stop_on_sprint_finish,
+      regression_testing_enabled: body.regression_testing_enabled,
+      regression_trigger: body.regression_trigger,
+      assigned_agents: body.assigned_agents,
+    });
+
+    return NextResponse.json({ settings });
+  } catch (error) {
+    console.error('Failed to update watchdog settings:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
