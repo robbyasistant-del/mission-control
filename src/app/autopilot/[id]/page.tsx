@@ -528,24 +528,34 @@ export default function AutopilotProductPage() {
     }
   }, [activeTab, product]);
 
-  // Watchdog countdown timer
+  // Watchdog SSE connection for real-time countdown
   useEffect(() => {
-    if (!isWatchdogRunning || !watchdogSettings?.next_run_at) {
-      setWatchdogCountdown(0);
-      return;
-    }
+    if (!product || activeTab !== 'watchdog') return;
+
+    const eventSource = new EventSource(`/api/autopilot/products/${product.id}/watchdog/status`);
     
-    const updateCountdown = () => {
-      const nextRun = new Date(watchdogSettings.next_run_at).getTime();
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((nextRun - now) / 1000));
-      setWatchdogCountdown(diff);
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setIsWatchdogRunning(data.is_running);
+        setWatchdogCountdown(data.countdown_seconds);
+        if (data.interval_seconds) {
+          setWatchdogSettings((prev: any) => prev ? { ...prev, interval_seconds: data.interval_seconds } : prev);
+        }
+      } catch (error) {
+        console.error('Failed to parse SSE data:', error);
+      }
     };
-    
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [isWatchdogRunning, watchdogSettings?.next_run_at]);
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      // Don't close on error, let it reconnect automatically
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [product?.id, activeTab]);
 
   if (loading) {
     return (

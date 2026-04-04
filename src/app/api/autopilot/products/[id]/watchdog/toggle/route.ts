@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { toggleWatchdog, addWatchdogLog } from '@/lib/db/autopilot-watchdog';
+import { startWatchdog, stopWatchdog } from '@/lib/watchdog-engine';
+import { getOrCreateWatchdogSettings } from '@/lib/db/autopilot-watchdog';
 import { getDb } from '@/lib/db';
 
 function recreateTableWithoutFK(db: any) {
@@ -126,16 +127,19 @@ export async function POST(
     recreateTableWithoutFK(db);
     
     const body = await request.json().catch(() => ({}));
-    const isRunning = body.is_running === true;
+    const shouldRun = body.is_running === true;
     
-    const settings = toggleWatchdog(params.id, isRunning);
+    if (shouldRun) {
+      // Start the real watchdog
+      const intervalSeconds = body.interval_seconds || 300;
+      startWatchdog(params.id, intervalSeconds);
+    } else {
+      // Stop the real watchdog
+      stopWatchdog(params.id);
+    }
     
-    addWatchdogLog(params.id, {
-      execution_type: 'control',
-      status: 'info',
-      message: isRunning ? 'Watchdog started' : 'Watchdog stopped',
-      details: JSON.stringify({ timestamp: new Date().toISOString() }),
-    });
+    // Return updated settings
+    const settings = getOrCreateWatchdogSettings(params.id);
 
     return NextResponse.json({ settings });
   } catch (error) {

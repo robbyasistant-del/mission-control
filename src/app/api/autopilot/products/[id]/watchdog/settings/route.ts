@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateWatchdogSettings, updateWatchdogSettings } from '@/lib/db/autopilot-watchdog';
+import { restartWatchdog, getWatchdogStatus } from '@/lib/watchdog-engine';
 import { getDb } from '@/lib/db';
 
 function recreateTableWithoutFK(db: any) {
@@ -157,6 +158,11 @@ export async function PUT(
     ensureTable();
     const body = await request.json().catch(() => ({}));
     
+    // Check if interval changed and watchdog is running
+    const currentStatus = getWatchdogStatus(params.id);
+    const newInterval = body.interval_seconds;
+    const intervalChanged = newInterval !== undefined && newInterval !== currentStatus.intervalSeconds;
+    
     const settings = updateWatchdogSettings(params.id, {
       dashboard_url: body.dashboard_url,
       interval_seconds: body.interval_seconds,
@@ -176,6 +182,12 @@ export async function PUT(
       include_technical_architecture: body.include_technical_architecture,
       include_implementation_roadmap: body.include_implementation_roadmap,
     });
+
+    // Restart watchdog if interval changed and it was running
+    if (intervalChanged && currentStatus.isRunning && newInterval) {
+      console.log(`[Watchdog] Interval changed to ${newInterval}s, restarting...`);
+      restartWatchdog(params.id, newInterval);
+    }
 
     return NextResponse.json({ settings });
   } catch (error) {

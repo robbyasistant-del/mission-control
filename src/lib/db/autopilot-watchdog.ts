@@ -65,6 +65,14 @@ export interface WatchdogSettingsInput {
   include_implementation_roadmap?: boolean;
   regression_trigger?: string;
   assigned_agents?: { name: string; agent_id: string }[];
+  // Status fields (internal use)
+  is_running?: boolean;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  last_run_status?: string | null;
+  last_run_summary?: string | null;
+  current_task_id?: string | null;
+  next_task_id?: string | null;
 }
 
 const DEFAULT_SETTINGS: Partial<WatchdogSettings> = {
