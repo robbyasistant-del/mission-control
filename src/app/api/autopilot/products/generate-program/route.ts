@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { complete } from '@/lib/autopilot/llm';
+import { getAutopilotPrompt, type PromptKey } from '@/lib/db/autopilot-prompts';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +17,62 @@ const FALLBACK_PRD = `# Product Requirements Document
 ## Reference Urls:
 
 ## Visual References:`;
+
+const PROMPT_KEY: PromptKey = 'product-program';
+
+async function getPromptAndConfig(productId?: string) {
+  // 1. Try to get from DB if product_id provided
+  if (productId) {
+    const dbPrompt = getAutopilotPrompt(productId, PROMPT_KEY);
+    if (dbPrompt) {
+      return {
+        prompt_text: dbPrompt.prompt_text,
+        model: dbPrompt.model,
+        temperature: dbPrompt.temperature,
+        max_tokens: dbPrompt.max_tokens,
+        timeout_ms: dbPrompt.timeout_ms,
+        system_prompt: dbPrompt.system_prompt,
+      };
+    }
+  }
+  
+  // 2. Fallback: read from file
+  try {
+    const filepath = path.join(process.cwd(), 'prompts', '01-product-program.md');
+    const content = await fs.readFile(filepath, 'utf-8');
+    
+    // Parse prompt text
+    const promptMatch = content.match(/## Prompt Template\s*\n\s*```(?:\w*\n|\n)?([\s\S]*?)```/);
+    const promptText = promptMatch ? promptMatch[1].trim() : '';
+    
+    // Parse config
+    const modelMatch = content.match(/- \*\*Model\*\*:\s*`?([^`\n]+)`?/);
+    const tempMatch = content.match(/- \*\*Temperature\*\*:\s*`?([^`\n]+)`?/);
+    const tokensMatch = content.match(/- \*\*Max Tokens\*\*:\s*`?([^`\n]+)`?/);
+    const timeoutMatch = content.match(/- \*\*Timeout\*\*:\s*`?([^`\n\(]+)`?/);
+    const systemMatch = content.match(/- \*\*System Prompt\*\*:\s*`?([^`\n]+)`?/);
+    
+    return {
+      prompt_text: promptText,
+      model: modelMatch ? modelMatch[1].trim() : 'openclaw',
+      temperature: tempMatch ? parseFloat(tempMatch[1]) : 0.7,
+      max_tokens: tokensMatch ? parseInt(tokensMatch[1]) : 2048,
+      timeout_ms: timeoutMatch ? parseInt(timeoutMatch[1]) : 120000,
+      system_prompt: systemMatch ? systemMatch[1].trim() : 'You are a product requirements specialist. Create concise, practical PRDs with maximum 3 items per section.',
+    };
+  } catch (error) {
+    console.error('Failed to read prompt file:', error);
+    // 3. Final fallback: hardcoded defaults
+    return {
+      prompt_text: '', // Will use hardcoded buildPrompt as last resort
+      model: 'openclaw',
+      temperature: 0.7,
+      max_tokens: 2048,
+      timeout_ms: 120000,
+      system_prompt: 'You are a product requirements specialist. Create concise, practical PRDs with maximum 3 items per section.',
+    };
+  }
+}
 
 function buildPrompt(input: {
   name: string;
@@ -66,7 +125,7 @@ Respond with ONLY the PRD content in the exact format above. No markdown code bl
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, repo_url, live_url, source_code_path, local_deploy_path } = body || {};
+    const { name, description, repo_url, live_url, source_code_path, local_deploy_path, product_id } = body || {};
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
@@ -75,15 +134,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
+    // Get prompt and config from DB or file
+    const config = await getPromptAndConfig(product_id);
+    
+    // Build the final prompt
+    const promptText = config.prompt_text || buildPrompt({ name, description, repo_url, live_url, source_code_path, local_deploy_path });
+    
+    // Replace variables in prompt text if they exist
+    const finalPrompt = promptText
+      .replace(/\{\{name\}\}/g, name || 'Untitled Product')
+      .replace(/\{\{description\}\}/g, description || 'No description provided')
+      .replace(/\{\{repo_url\}\}/g, repo_url || '')
+      .replace(/\{\{live_url\}\}/g, live_url || '')
+      .replace(/\{\{source_code_path\}\}/g, source_code_path || '')
+      .replace(/\{\{local_deploy_path\}\}/g, local_deploy_path || '');
 
-    // Use the same approach as Research: complete() against /v1/chat/completions
-    const result = await complete(prompt, {
-      model: 'openclaw', // Use Gateway's default agent
-      systemPrompt: 'You are a product requirements specialist. Create concise, practical PRDs with maximum 3 items per section.',
-      temperature: 0.7,
-      maxTokens: 2048,
-      timeoutMs: 120_000, // 2 minutes
+    // Use the configured parameters
+    const result = await complete(finalPrompt, {
+      model: config.model,
+      systemPrompt: config.system_prompt,
+      temperature: config.temperature,
+      maxTokens: config.max_tokens,
+      timeoutMs: config.timeout_ms,
       signal: request.signal,
     });
 
