@@ -168,10 +168,6 @@ function recreateTablesWithoutFK(db: any) {
   const tablesExist = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('autopilot_sprints', 'autopilot_tasks')").all();
   
   if (tablesExist.length > 0) {
-    // Backup existing data if any
-    const existingSprints = db.prepare("SELECT * FROM autopilot_sprints").all().catch(() => []);
-    const existingTasks = db.prepare("SELECT * FROM autopilot_tasks").all().catch(() => []);
-    
     // Drop tables with foreign keys disabled
     db.pragma('foreign_keys = OFF');
     try {
