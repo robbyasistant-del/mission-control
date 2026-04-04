@@ -59,12 +59,13 @@ export async function GET(
       }
       
       if (inPromptTemplate) {
-        if (line.startsWith('```')) {
+        // Check for code block markers (with or without language specifier)
+        if (line.trim().startsWith('```')) {
           if (promptTemplateLines.length > 0) {
             // End of code block
             break;
           }
-          // Start of code block, skip
+          // Start of code block, skip this line
           continue;
         }
         promptTemplateLines.push(line);

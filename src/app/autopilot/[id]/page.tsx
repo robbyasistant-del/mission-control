@@ -240,7 +240,7 @@ function PromptsTab({ productId }: { productId: string }) {
               <p className="text-xs text-mc-text-secondary mt-1 line-clamp-2">{prompt.description}</p>
             </button>
           );
-        })};
+        })}
       </div>
 
       {/* Right content - Prompt editor */}
