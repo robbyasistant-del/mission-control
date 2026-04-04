@@ -21,7 +21,7 @@ interface TaskCreationResult {
 
 /**
  * Ejecuta un ciclo completo del watchdog para un producto
- * Este método es el entry point principal
+ * Este metodo es el entry point principal
  */
 export async function executeWatchdogCycle(productId: string): Promise<{
   success: boolean;
@@ -41,7 +41,7 @@ export async function executeWatchdogCycle(productId: string): Promise<{
   const startTime = Date.now();
 
   try {
-    // Paso 1: Leer configuración
+    // Paso 1: Leer configuracion
     const context = await loadExecutionContext(productId);
     if (!context) {
       return {
@@ -101,7 +101,7 @@ export async function executeWatchdogCycle(productId: string): Promise<{
 }
 
 /**
- * Carga el contexto de ejecución (producto + settings)
+ * Carga el contexto de ejecucion (producto + settings)
  */
 async function loadExecutionContext(productId: string): Promise<ExecutionContext | null> {
   try {
@@ -229,25 +229,9 @@ async function updateWorkspaceTaskStatus(taskId: string, newStatus: string): Pro
  * Ejecuta auto-nudge para una tarea stuck
  */
 async function executeAutoNudge(task: any): Promise<void> {
-  // TODO: Implementar lógica de auto-nudge llamando al API de Mission Control
+  // TODO: Implementar logica de auto-nudge llamando al API de Mission Control
   // Por ahora solo logueamos
   console.log(`[Watchdog] Executing auto-nudge for task ${task.id}`);
-}
-
-/**
- * Obtiene el número de sprint para una tarea
- */
-function getSprintNumberForTask(sprintId: string): number | null {
-  try {
-    const db = getDb();
-    const result = db.prepare(
-      'SELECT sprint_number FROM autopilot_sprints WHERE id = ?'
-    ).get(sprintId) as { sprint_number: number } | undefined;
-    return result?.sprint_number ?? null;
-  } catch (error) {
-    console.error(`[Watchdog] Failed to get sprint number:`, error);
-    return null;
-  }
 }
 
 /**
@@ -281,7 +265,7 @@ async function createNextTask(context: ExecutionContext): Promise<TaskCreationRe
     }
   }
 
-  // 3.3: Construir contexto de creación
+  // 3.3: Construir contexto de creacion
   const creationContext = await buildTaskCreationContext(product, settings, nextTask);
 
   // 3.4: Verificar regression testing
@@ -291,7 +275,7 @@ async function createNextTask(context: ExecutionContext): Promise<TaskCreationRe
     if (shouldRunRegression) {
       const regressionResult = await createRegressionTestingTask(product, settings, creationContext);
       if (regressionResult.success) {
-        // Notificar si está habilitado
+        // Notificar si esta habilitado
         if (settings.notify_new_task) {
           await notifyTelegramNewTask(product, regressionResult.taskId!, 'Regression Testing');
         }
@@ -310,7 +294,7 @@ async function createNextTask(context: ExecutionContext): Promise<TaskCreationRe
       start_date: new Date().toISOString(),
     });
 
-    // Notificar si está habilitado
+    // Notificar si esta habilitado
     if (settings.notify_new_task) {
       await notifyTelegramNewTask(product, taskResult.taskId!, nextTask.title);
     }
@@ -327,7 +311,23 @@ function getNextPendingTaskOrdered(productId: string): AutopilotTask | null {
 }
 
 /**
- * Obtiene el sprint de la última tarea creada
+ * Obtiene el numero de sprint para una tarea
+ */
+function getSprintNumberForTask(sprintId: string): number | null {
+  try {
+    const db = getDb();
+    const result = db.prepare(
+      'SELECT sprint_number FROM autopilot_sprints WHERE id = ?'
+    ).get(sprintId) as { sprint_number: number } | undefined;
+    return result?.sprint_number ?? null;
+  } catch (error) {
+    console.error(`[Watchdog] Failed to get sprint number:`, error);
+    return null;
+  }
+}
+
+/**
+ * Obtiene el sprint de la ultima tarea creada
  */
 async function getLastCreatedTaskSprint(productId: string): Promise<number | null> {
   try {
@@ -379,7 +379,7 @@ async function buildTaskCreationContext(
     parts.push(`## Executive Summary (Summary)\n${summary}`);
   }
 
-  // Technical Architecture - solo stack tecnológico
+  // Technical Architecture - solo stack tecnologico
   if (settings.include_technical_architecture && product.technical_architecture) {
     const stack = extractTechStack(product.technical_architecture);
     parts.push(`## Tech Stack\n${stack}`);
@@ -393,13 +393,7 @@ async function buildTaskCreationContext(
     parts.push(`## DEVELOPER RULES (MANDATORY)\n${devRules}`);
   }
 
-  // Referencias a documentos
-  parts.push(`## Reference Documents
-- Read and follow: IMPLEMENTATION_ROADMAP.md
-- Read and follow: TECHNICAL_ARCHITECTURE.md
-- Read and follow: DEVELOPER_RULES from IMPLEMENTATION_ROADMAP.md`);
-
-  // Nota: La descripción detallada se generará vía LLM
+  // Nota: La descripcion detallada se generara via LLM
   parts.push(`## Task Details (for LLM generation)
 Title: ${task.title}
 Agent Role: ${task.agent_role}
@@ -419,23 +413,23 @@ async function summarizeText(text: string, maxLength: number): Promise<string> {
 }
 
 /**
- * Extrae el stack tecnológico de la arquitectura
+ * Extrae el stack tecnologico de la arquitectura
  */
 function extractTechStack(architecture: string): string {
-  // Buscar sección de stack tecnológico
+  // Buscar seccion de stack tecnologico
   const stackMatch = architecture.match(/##?\s*(Tech Stack|Technology Stack|Stack|Technologies)[\s\S]*?(?=##?\s|$)/i);
   if (stackMatch) {
-    return stackMatch[0].substring(0, 2000); // Limitar tamaño
+    return stackMatch[0].substring(0, 2000); // Limitar tamano
   }
-  // Si no hay sección específica, devolver primeras líneas
+  // Si no hay seccion especifica, devolver primeras lineas
   return architecture.split('\n').slice(0, 30).join('\n');
 }
 
 /**
- * Extrae el contenido del sprint específico
+ * Extrae el contenido del sprint especifico
  */
 function extractSprintContent(roadmap: string): string {
-  // Buscar sección del sprint (por número o ID)
+  // Buscar seccion del sprint (por numero o ID)
   const sprintMatch = roadmap.match(/##?\s*Sprint\s*\d+[\s\S]*?(?=##?\s*Sprint|$)/i);
   if (sprintMatch) {
     return sprintMatch[0].substring(0, 3000);
@@ -462,27 +456,27 @@ async function checkRegressionTestingNeeded(context: ExecutionContext): Promise<
   
   if (!settings.regression_testing_enabled) return false;
 
-  // Verificar si la última tarea fue de regression testing
+  // Verificar si la ultima tarea fue de regression testing
   const lastTask = await getLastCreatedTask(context.product.id);
   if (lastTask?.title?.includes('Regression Testing')) {
-    return true; // Continuar con tarea normal después de regression
+    return true; // Continuar con tarea normal despues de regression
   }
 
   // Verificar por trigger configurado
   const trigger = settings.regression_trigger || 'sprint finish';
   
-  // TODO: Implementar lógica de frecuencia (cada X tareas, cada X horas)
+  // TODO: Implementar logica de frecuencia (cada X tareas, cada X horas)
   // Por ahora solo verificamos por sprint finish
   if (trigger === 'sprint finish') {
-    // Implementar lógica de sprint finish
-    // Esto requeriría saber cuándo se completó el último sprint
+    // Implementar logica de sprint finish
+    // Esto requeriria saber cuando se completo el ultimo sprint
   }
   
   return false;
 }
 
 /**
- * Obtiene la última tarea creada
+ * Obtiene la ultima tarea creada
  */
 async function getLastCreatedTask(productId: string): Promise<AutopilotTask | null> {
   try {
@@ -508,7 +502,7 @@ async function createRegressionTestingTask(
   settings: WatchdogSettings,
   context: string
 ): Promise<TaskCreationResult> {
-  // Generar número de regression testing
+  // Generar numero de regression testing
   const regressionCount = await getRegressionTestingCount(product.id);
   const title = `Regression Testing #${regressionCount + 1}`;
 
@@ -576,7 +570,7 @@ async function createMissionControlTask(
   context: string
 ): Promise<TaskCreationResult> {
   try {
-    // 1. Generar descripción vía LLM con timeout de 5 minutos
+    // 1. Generar descripcion via LLM con timeout de 5 minutos
     console.log(`[Watchdog] Generating task description via LLM for: ${autopilotTask.title}`);
     const generatedDescription = await generateTaskDescriptionWithLLM(
       autopilotTask,
@@ -628,7 +622,7 @@ interface CreateTaskParams {
 }
 
 /**
- * Genera la descripción de la tarea usando LLM via Gateway
+ * Genera la descripcion de la tarea usando LLM via Gateway
  * Timeout: 5 minutos (300000ms)
  */
 async function generateTaskDescriptionWithLLM(
@@ -636,7 +630,7 @@ async function generateTaskDescriptionWithLLM(
   context: string,
   timeoutMs: number = 300000
 ): Promise<string> {
-  const prompt = `You are a technical project manager. Create a comprehensive task description based on the following information.
+  const prompt = `You are a technical project manager. Create a comprehensive task description with clear, atomic instructions.
 
 TASK TO IMPLEMENT:
 - Title: ${task.title}
@@ -648,37 +642,39 @@ TASK TO IMPLEMENT:
 CONTEXT:
 ${context}
 
-INSTRUCTIONS:
-Create a detailed task description with the following sections:
+INSTRUCTIONS - MANDATORY:
+Create a task description with exactly these sections:
 
 ## User Story
-[Describe the feature from user perspective]
+[Describe the feature from user perspective in 2-3 sentences]
 
-## Functionality
-[Detailed description of what needs to be built]
+## What to Build (5-10 Atomic Steps)
+Provide between 5 and 10 clear, atomic, actionable steps. Each step should be:
+- Specific and concrete
+- Independent where possible
+- Easy to understand and implement
+- Ordered logically
+
+Example format:
+1. [Specific action to take]
+2. [Specific action to take]
+3. [Specific action to take]
+...
 
 ## Technical Requirements
-[Specific technical details, APIs, components needed]
-
-## Implementation Steps
-[Step-by-step guide for the developer]
+[Key technical details: APIs, components, data structures needed]
 
 ## Quality Checks / Acceptance Criteria
-[Specific tests and validations required]
+[Specific, testable criteria to verify completion]
 
 ## Definition of Done
-[Clear conditions that must be met to mark this task as complete]
-- Code is written and tested
-- No errors in logs
-- Feature works as described
-- All quality checks pass
+- Code is implemented according to specifications
+- All acceptance criteria pass
+- No console errors when running
+- Feature works as described in user story
+- Code follows project conventions
 
-## References
-- Read and follow: IMPLEMENTATION_ROADMAP.md
-- Read and follow: TECHNICAL_ARCHITECTURE.md  
-- Read and follow: DEVELOPER_RULES from IMPLEMENTATION_ROADMAP.md
-
-Be concise but thorough. The developer should have all information needed to complete this task successfully.`;
+Be CONCISE but COMPLETE. The agent must know EXACTLY what to build.`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -739,7 +735,7 @@ ${context}`;
     }
     
     console.error('[Watchdog] LLM generation failed:', error);
-    // Fallback: usar descripción original
+    // Fallback: usar descripcion original
     return `# Task: ${task.title}
 **Agent:** ${task.agent_role}
 
@@ -845,10 +841,10 @@ async function notifyTelegramNewTask(
   taskTitle: string
 ): Promise<void> {
   try {
-    // TODO: Implementar integración con Telegram
+    // TODO: Implementar integracion con Telegram
     console.log(`[Watchdog] Telegram notification: New task "${taskTitle}" in ${product.name}`);
     
-    // Aquí iría la llamada al API de OpenClaw Gateway o Telegram Bot
+    // Aqui iria la llamada al API de OpenClaw Gateway o Telegram Bot
     // await fetch('/api/notify/telegram', { ... });
   } catch (error) {
     console.error(`[Watchdog] Failed to send Telegram notification:`, error);
