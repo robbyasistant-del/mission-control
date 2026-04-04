@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { upsertAutopilotPrompt, type PromptKey } from '@/lib/db/autopilot-prompts';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export async function GET(
   }
 }
 
-// POST /api/prompts/[key] - Save prompt content to file
+// POST /api/prompts/[key] - Save prompt content to file and DB params
 export async function POST(
   request: NextRequest,
   { params }: { params: { key: string } }
@@ -83,7 +84,7 @@ export async function POST(
     }
     
     const body = await request.json();
-    const { prompt_text } = body;
+    const { prompt_text, model, temperature, max_tokens, timeout_ms, system_prompt, product_id } = body;
     
     if (typeof prompt_text !== 'string') {
       return NextResponse.json(
@@ -104,14 +105,27 @@ export async function POST(
     
     // Extract header (everything before ## Prompt Template)
     const headerMatch = existingContent.match(/^[\s\S]*?(?=## Prompt Template)/);
-    const header = headerMatch ? headerMatch[0] : `# ${key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}\n\n`;
+    const header = headerMatch ? headerMatch[0] : `# ${key.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}\n\n`;
     
     // Build new content
     const newContent = `${header}## Prompt Template\n\n\`\`\`\n${prompt_text}\n\`\`\`\n`;
     
     await fs.writeFile(filepath, newContent, 'utf-8');
     
-    return NextResponse.json({ success: true, key });
+    // Save params to DB if product_id provided
+    if (product_id) {
+      upsertAutopilotPrompt(product_id, key as PromptKey, {
+        prompt_text,
+        model,
+        temperature,
+        max_tokens,
+        timeout_ms,
+        system_prompt,
+        is_enabled: true,
+      });
+    }
+    
+    return NextResponse.json({ success: true, key, saved_to_db: !!product_id });
   } catch (error) {
     console.error('Failed to save prompt file:', error);
     return NextResponse.json(

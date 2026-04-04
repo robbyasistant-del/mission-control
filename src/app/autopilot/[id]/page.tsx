@@ -130,17 +130,31 @@ function PromptsTab({ productId }: { productId: string }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/prompts/${key}`);
-      if (!res.ok) throw new Error('Failed to load prompt from file');
-      const data = await res.json();
       
+      // 1. Load from file (prompt text + defaults)
+      const fileRes = await fetch(`/api/prompts/${key}`);
+      if (!fileRes.ok) throw new Error('Failed to load prompt from file');
+      const fileData = await fileRes.json();
+      
+      // 2. Load from DB (custom params if exist)
+      const dbRes = await fetch(`/api/autopilot/products/${productId}/prompts`);
+      let dbParams = null;
+      if (dbRes.ok) {
+        const dbData = await dbRes.json();
+        const savedPrompt = dbData.prompts?.find((p: any) => p.prompt_key === key);
+        if (savedPrompt) {
+          dbParams = savedPrompt;
+        }
+      }
+      
+      // 3. Merge: file text + DB params (or file defaults)
       setForm({
-        prompt_text: data.prompt_text || '',
-        model: data.config?.model || 'openclaw',
-        temperature: data.config?.temperature ?? 0.7,
-        max_tokens: data.config?.max_tokens || 4096,
-        timeout_ms: data.config?.timeout_ms || 300000,
-        system_prompt: data.config?.system_prompt || '',
+        prompt_text: fileData.prompt_text || '',
+        model: dbParams?.model || fileData.config?.model || 'openclaw',
+        temperature: dbParams?.temperature ?? fileData.config?.temperature ?? 0.7,
+        max_tokens: dbParams?.max_tokens || fileData.config?.max_tokens || 4096,
+        timeout_ms: dbParams?.timeout_ms || fileData.config?.timeout_ms || 300000,
+        system_prompt: dbParams?.system_prompt || fileData.config?.system_prompt || '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load prompt');
