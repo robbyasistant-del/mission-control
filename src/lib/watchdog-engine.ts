@@ -30,7 +30,7 @@ async function executeWatchdog(productId: string): Promise<{
   };
 }
 
-// Run a single watchdog cycle
+// Run a single watchdog cycle - logs only the result (like a healthcheck)
 async function runWatchdogCycle(productId: string) {
   const settings = getOrCreateWatchdogSettings(productId);
   
@@ -40,35 +40,19 @@ async function runWatchdogCycle(productId: string) {
   }
 
   const startTime = Date.now();
-  
-  // Log start
-  addWatchdogLog(productId, {
-    execution_type: 'cycle',
-    status: 'info',
-    message: 'Watchdog cycle started',
-  });
 
   try {
     const result = await executeWatchdog(productId);
     const duration = Date.now() - startTime;
 
-    if (result.success) {
-      addWatchdogLog(productId, {
-        execution_type: 'cycle',
-        status: 'success',
-        message: result.message,
-        details: result.details,
-        duration_ms: duration,
-      });
-    } else {
-      addWatchdogLog(productId, {
-        execution_type: 'cycle',
-        status: 'error',
-        message: result.message,
-        details: result.details,
-        duration_ms: duration,
-      });
-    }
+    // Single log entry with result (success or error)
+    addWatchdogLog(productId, {
+      execution_type: 'cycle',
+      status: result.success ? 'success' : 'error',
+      message: result.message,
+      details: result.details,
+      duration_ms: duration,
+    });
 
     // Update last run info
     updateWatchdogSettings(productId, {
@@ -81,10 +65,11 @@ async function runWatchdogCycle(productId: string) {
     const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : String(error);
     
+    // Single log entry for exception
     addWatchdogLog(productId, {
       execution_type: 'cycle',
       status: 'error',
-      message: 'Watchdog cycle failed with exception',
+      message: 'Watchdog cycle failed',
       details: errorMessage,
       duration_ms: duration,
     });
@@ -96,7 +81,7 @@ async function runWatchdogCycle(productId: string) {
     });
   }
 
-  // Schedule next run - update both DB and in-memory map
+  // Update next run time silently (no logging - this is internal scheduling)
   const intervalSeconds = settings.interval_seconds || 300;
   const nextRunAt = calculateNextRun(intervalSeconds);
   
