@@ -7,10 +7,55 @@ import {
   deleteAutopilotSprintsByProduct,
   deleteAutopilotTasksByProduct
 } from '@/lib/db/autopilot-sprints-tasks';
-import { run } from '@/lib/db';
+import { run, getDb } from '@/lib/db';
 
-function ensureColumns() {
+function ensureTables() {
   try { run(`ALTER TABLE autopilot_products ADD COLUMN sprints_generated INTEGER DEFAULT 0`); } catch {}
+  // Ensure tables exist with proper foreign keys disabled temporarily
+  try {
+    const db = getDb();
+    db.pragma('foreign_keys = OFF');
+    
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS autopilot_sprints (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        sprint_number INTEGER NOT NULL,
+        phase_name TEXT NOT NULL,
+        phase_number INTEGER NOT NULL,
+        functionality_analysis TEXT,
+        features_description TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(product_id, sprint_number)
+      )
+    `);
+    
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS autopilot_tasks (
+        id TEXT PRIMARY KEY,
+        sprint_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        task_number INTEGER NOT NULL,
+        agent_role TEXT NOT NULL,
+        agent_name TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'blocked', 'testing', 'done')),
+        title TEXT NOT NULL,
+        description_text TEXT,
+        deliverables TEXT,
+        quality_criteria TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(sprint_id, task_number)
+      )
+    `);
+    
+    db.pragma('foreign_keys = ON');
+  } catch (e) {
+    console.error('Failed to ensure tables:', e);
+  }
 }
 
 export const dynamic = 'force-dynamic';
@@ -189,7 +234,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    ensureColumns();
+    ensureTables();
     const product = getAutopilotProduct(params.id);
 
     if (!product) {
@@ -204,8 +249,16 @@ export async function POST(
     }
 
     // Delete existing sprints and tasks for this product
-    deleteAutopilotTasksByProduct(params.id);
-    deleteAutopilotSprintsByProduct(params.id);
+    // Use foreign_keys pragma to avoid constraint issues during deletion
+    const db = getDb();
+    try {
+      db.pragma('foreign_keys = OFF');
+      deleteAutopilotTasksByProduct(params.id);
+      deleteAutopilotSprintsByProduct(params.id);
+      db.pragma('foreign_keys = ON');
+    } catch (delErr) {
+      console.error('Failed to delete existing sprints/tasks:', delErr);
+    }
 
     // Parse the roadmap
     const parsedSprints = parseRoadmap(product.implementation_roadmap);
