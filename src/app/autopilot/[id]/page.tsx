@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save } from 'lucide-react';
 import Link from 'next/link';
 
 type WorkflowState = 
@@ -460,13 +460,6 @@ export default function AutopilotProductPage() {
             <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide">Product Program (PRD)</h2>
-                <button
-                  onClick={() => handleSaveStep('program')}
-                  disabled={saving}
-                  className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
               </div>
               <textarea
                 value={editedProgram}
@@ -474,6 +467,15 @@ export default function AutopilotProductPage() {
                 placeholder="# Product Requirements Document..."
                 className="w-full h-[60vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
               />
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={() => handleSaveStep('program')}
+                  disabled={saving}
+                  className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -541,9 +543,9 @@ export default function AutopilotProductPage() {
                     <button
                       onClick={() => handleSaveStep('program')}
                       disabled={saving}
-                      className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50"
+                      className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2"
                     >
-                      {saving ? 'Saving...' : 'Save Program'}
+                      {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
                     </button>
                   </div>
                 </div>
@@ -599,8 +601,8 @@ export default function AutopilotProductPage() {
                       className="flex-1 w-full min-h-[400px] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60 overflow-auto"
                     />
                     <div className="flex justify-end">
-                      <button onClick={() => handleSaveStep('executive-summary')} disabled={saving || autoBuildingExecutive} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
-                        {saving ? 'Saving...' : 'Save Executive Summary'}
+                      <button onClick={() => handleSaveStep('executive-summary')} disabled={saving || autoBuildingExecutive} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2">
+                        {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
                       </button>
                     </div>
                   </div>
@@ -658,8 +660,8 @@ export default function AutopilotProductPage() {
                       className="flex-1 w-full min-h-[400px] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60 overflow-auto"
                     />
                     <div className="flex justify-end">
-                      <button onClick={() => handleSaveStep('technical-architecture')} disabled={saving || autoBuildingArch} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
-                        {saving ? 'Saving...' : 'Save Technical Architecture'}
+                      <button onClick={() => handleSaveStep('technical-architecture')} disabled={saving || autoBuildingArch} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2">
+                        {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
                       </button>
                     </div>
                   </div>
@@ -680,8 +682,8 @@ export default function AutopilotProductPage() {
                     className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
                   />
                   <div className="flex justify-end">
-                    <button onClick={() => handleSaveStep('implementation-roadmap')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50">
-                      {saving ? 'Saving...' : 'Save Implementation Roadmap'}
+                    <button onClick={() => handleSaveStep('implementation-roadmap')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2">
+                      {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
                     </button>
                   </div>
                 </div>
