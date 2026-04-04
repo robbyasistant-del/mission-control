@@ -84,21 +84,15 @@ export async function POST(request: NextRequest) {
       temperature: 0.7,
       maxTokens: 2048,
       timeoutMs: 120_000, // 2 minutes
+      signal: request.signal,
     });
 
-    // Clean up the response
-    let suggestedProgram = result.content.trim();
-    
-    // Remove markdown code blocks if present
-    const codeBlockMatch = suggestedProgram.match(/^```(?:markdown)?\s*([\s\S]*?)```$/m);
-    if (codeBlockMatch) {
-      suggestedProgram = codeBlockMatch[1].trim();
+    if (request.signal.aborted) {
+      return NextResponse.json({ error: 'Request aborted', suggestedProgram: FALLBACK_PRD, source: 'fallback:aborted' }, { status: 499 });
     }
 
-    // Ensure it starts with the expected header
-    if (!suggestedProgram.includes('# Product Requirements Document')) {
-      suggestedProgram = `# Product Requirements Document\n\n${suggestedProgram}`;
-    }
+    // Preserve the complete LLM response without filtering
+    const suggestedProgram = result.content.trim();
 
     return NextResponse.json({
       suggestedProgram,

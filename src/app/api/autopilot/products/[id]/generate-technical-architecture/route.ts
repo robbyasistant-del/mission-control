@@ -72,14 +72,15 @@ export async function POST(
       temperature: 0.7,
       maxTokens: 8000,
       timeoutMs: 300_000,
+      signal: request.signal,
     });
 
-    let technicalArchitecture = result.content.trim();
-    
-    const codeBlockMatch = technicalArchitecture.match(/^```(?:markdown)?\s*([\s\S]*?)```$/m);
-    if (codeBlockMatch) {
-      technicalArchitecture = codeBlockMatch[1].trim();
+    if (request.signal.aborted) {
+      return NextResponse.json({ error: 'Request aborted' }, { status: 499 });
     }
+
+    // Use the complete LLM response without filtering - preserve everything
+    const technicalArchitecture = result.content.trim();
 
     updateAutopilotProduct(params.id, { 
       technical_architecture: technicalArchitecture,

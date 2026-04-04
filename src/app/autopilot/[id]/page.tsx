@@ -187,19 +187,44 @@ export default function AutopilotProductPage() {
     setAutoBuildingExecutive(true);
     setExecutiveCountdown(300);
 
+    const controller = new AbortController();
+    let timedOut = false;
+
+    // Setup timeout handler to abort request and re-enable UI after 5 minutes
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      setAutoBuildingExecutive(false);
+      alert('Auto-Build timed out after 5 minutes. You can now enter the Executive Summary manually.');
+    }, 300000);
+
     try {
       const res = await fetch(`/api/autopilot/products/${product.id}/generate-executive-summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ additional_prompt: additionalPrompt }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
+      // Ignore response if timeout already occurred
+      if (timedOut) {
+        console.log('Ignoring late response from executive summary generation (timeout exceeded)');
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to generate executive summary');
       setEditedExecutive(data.executiveSummary || '');
       await loadProduct();
     } catch (err) {
+      clearTimeout(timeoutId);
+      // Ignore abort errors from our timeout
+      if (err instanceof Error && err.name === 'AbortError' && timedOut) {
+        return;
+      }
       console.error(err);
-      alert(err instanceof Error ? err.message : 'Failed to auto-build executive summary');
+      alert(err instanceof Error ? err.message : 'Failed to auto-build executive summary. You can enter the content manually below.');
     } finally {
       setAutoBuildingExecutive(false);
     }
@@ -210,8 +235,13 @@ export default function AutopilotProductPage() {
     setAutoBuildingArch(true);
     setArchCountdown(300);
 
-    // Setup timeout handler to re-enable UI after 5 minutes
+    const controller = new AbortController();
+    let timedOut = false;
+
+    // Setup timeout handler to abort request and re-enable UI after 5 minutes
     const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
       setAutoBuildingArch(false);
       alert('Auto-Build timed out after 5 minutes. You can now enter the Technical Architecture manually.');
     }, 300000);
@@ -221,14 +251,26 @@ export default function AutopilotProductPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ additional_prompt: additionalPromptArch }),
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
+
+      // Ignore response if timeout already occurred
+      if (timedOut) {
+        console.log('Ignoring late response from technical architecture generation (timeout exceeded)');
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to generate technical architecture');
       setEditedArchitecture(data.technicalArchitecture || '');
       await loadProduct();
     } catch (err) {
       clearTimeout(timeoutId);
+      // Ignore abort errors from our timeout
+      if (err instanceof Error && err.name === 'AbortError' && timedOut) {
+        return;
+      }
       console.error(err);
       alert(err instanceof Error ? err.message : 'Failed to auto-build technical architecture. You can enter the content manually below.');
     } finally {

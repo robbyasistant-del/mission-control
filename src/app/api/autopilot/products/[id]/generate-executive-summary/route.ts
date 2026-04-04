@@ -137,18 +137,15 @@ export async function POST(
       temperature: 0.7,
       maxTokens: 4096,
       timeoutMs: 300_000,
+      signal: request.signal,
     });
 
-    let executiveSummary = result.content.trim();
-    
-    const codeBlockMatch = executiveSummary.match(/^```(?:markdown)?\s*([\s\S]*?)```$/m);
-    if (codeBlockMatch) {
-      executiveSummary = codeBlockMatch[1].trim();
+    if (request.signal.aborted) {
+      return NextResponse.json({ error: 'Request aborted' }, { status: 499 });
     }
 
-    if (!executiveSummary.includes('# Executive Summary')) {
-      executiveSummary = `# Executive Summary\n\n${executiveSummary}`;
-    }
+    // Use the complete LLM response without filtering - preserve everything
+    const executiveSummary = result.content.trim();
 
     updateAutopilotProduct(params.id, { 
       executive_summary: executiveSummary,

@@ -16,6 +16,7 @@ export interface CompletionOptions {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface CompletionResult {
@@ -39,6 +40,7 @@ export async function complete(prompt: string, options: CompletionOptions = {}):
     temperature = 0.7,
     maxTokens = 8192,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    signal,
   } = options;
 
   const messages: Array<{ role: string; content: string }> = [];
@@ -50,14 +52,28 @@ export async function complete(prompt: string, options: CompletionOptions = {}):
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (signal?.aborted) {
+      throw new Error('LLM completion aborted by caller');
+    }
+
     if (attempt > 0) {
       const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
       console.log(`[LLM] Retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, delay);
+        if (signal) {
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(new Error('LLM completion aborted by caller'));
+          };
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+      });
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const combinedSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
 
     try {
       const response = await fetch(`${GATEWAY_URL}/v1/chat/completions`, {
@@ -72,7 +88,7 @@ export async function complete(prompt: string, options: CompletionOptions = {}):
           temperature,
           max_tokens: maxTokens,
         }),
-        signal: controller.signal,
+        signal: combinedSignal,
       });
 
       if (!response.ok) {
@@ -103,7 +119,12 @@ export async function complete(prompt: string, options: CompletionOptions = {}):
       clearTimeout(timeout);
       lastError = error instanceof Error ? error : new Error(String(error));
       const isAbort = lastError.name === 'AbortError' || lastError.message.includes('aborted');
+      const callerAborted = signal?.aborted || lastError.message.includes('aborted by caller');
       const isNetwork = lastError.message.includes('fetch failed') || lastError.message.includes('ECONNREFUSED') || lastError.message.includes('ECONNRESET');
+
+      if (callerAborted) {
+        throw lastError;
+      }
 
       if (isAbort || isNetwork) {
         console.error(`[LLM] Attempt ${attempt + 1} failed (${isAbort ? 'timeout/abort' : 'network'}): ${lastError.message}`);

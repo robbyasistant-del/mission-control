@@ -163,6 +163,18 @@ export default function NewAutopilotProductPage() {
     setGenerationError(null);
     setForm(f => ({ ...f, product_program: '' }));
 
+    const controller = new AbortController();
+    let timedOut = false;
+
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      setGeneratingProgram(false);
+      setGenerationSeconds(0);
+      setGenerationError('Timeout — response ignored. You can edit manually or try again');
+      setForm(f => ({ ...f, product_program: fallbackProductProgram }));
+    }, 120000);
+
     try {
       const res = await fetch('/api/autopilot/products/generate-program', {
         method: 'POST',
@@ -175,7 +187,15 @@ export default function NewAutopilotProductPage() {
           source_code_path: form.source_code_path,
           local_deploy_path: form.local_deploy_path,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
+      if (timedOut) {
+        console.log('Ignoring late response from product program generation (timeout exceeded)');
+        return;
+      }
 
       const data = await res.json().catch(() => ({}));
       const suggested = typeof data?.suggestedProgram === 'string' && data.suggestedProgram.trim()
@@ -183,11 +203,15 @@ export default function NewAutopilotProductPage() {
         : fallbackProductProgram;
 
       if (data.source?.startsWith?.('fallback')) {
-        setGenerationError(data.source === 'fallback:timeout' ? 'Timeout — no response from Gateway' : 'Gateway error — using fallback');
+        setGenerationError(data.source === 'fallback:timeout' ? 'Timeout — response ignored. You can edit manually or try again' : 'Gateway error — using fallback');
       }
 
       setForm(f => ({ ...f, product_program: suggested }));
-    } catch {
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError' && timedOut) {
+        return;
+      }
       setGenerationError('Connection error — using fallback');
       setForm(f => ({ ...f, product_program: fallbackProductProgram }));
     } finally {
@@ -200,20 +224,10 @@ export default function NewAutopilotProductPage() {
   useEffect(() => {
     if (!generatingProgram) return;
     const t = setInterval(() => {
-      setGenerationSeconds((s) => {
-        if (s <= 1) {
-          clearInterval(t);
-          // On timeout, leave the textarea empty so user can fill manually or retry
-          setGenerationError('Timeout — you can edit manually or try again');
-          setForm(f => ({ ...f, product_program: fallbackProductProgram }));
-          setGeneratingProgram(false);
-          return 0;
-        }
-        return s - 1;
-      });
+      setGenerationSeconds((s) => (s <= 1 ? 0 : s - 1));
     }, 1000);
     return () => clearInterval(t);
-  }, [generatingProgram, fallbackProductProgram]);
+  }, [generatingProgram]);
 
   const handleSaveProgram = async () => {
     if (!productId) return;
