@@ -597,6 +597,26 @@ async function createMissionControlTask(
       start_date: new Date().toISOString(),
     });
 
+    // 4. Auto-dispatch (nudge) la tarea al agente
+    if (agentId) {
+      try {
+        console.log(`[Watchdog] Auto-dispatching task ${taskId} to agent ${agentId}`);
+        const dispatchRes = await fetch(`http://localhost:4001/api/tasks/${taskId}/dispatch`, {
+          method: 'POST',
+        });
+        
+        if (dispatchRes.ok) {
+          console.log(`[Watchdog] Task auto-dispatched successfully`);
+        } else {
+          const errorData = await dispatchRes.json().catch(() => ({ error: 'Unknown error' }));
+          console.error(`[Watchdog] Auto-dispatch failed:`, errorData);
+        }
+      } catch (dispatchError) {
+        console.error(`[Watchdog] Auto-dispatch error:`, dispatchError);
+        // No fallar la creacion si el dispatch falla
+      }
+    }
+
     return {
       success: true,
       taskId,
