@@ -15,6 +15,14 @@ export interface WatchdogSettings {
   regression_testing_enabled: boolean;
   regression_trigger: string;
   assigned_agents: string | null; // JSON array of {name, agent_id}
+  // Task creation context
+  additional_prompt_task_creation: string | null;
+  include_basic_info: boolean;
+  include_product_program: boolean;
+  include_executive_summary: boolean;
+  include_technical_architecture: boolean;
+  include_implementation_roadmap: boolean;
+  // Status
   is_running: boolean;
   next_run_at: string | null;
   last_run_at: string | null;
@@ -48,6 +56,13 @@ export interface WatchdogSettingsInput {
   notify_statuses?: string[];
   stop_on_sprint_finish?: boolean;
   regression_testing_enabled?: boolean;
+  // Task creation context
+  additional_prompt_task_creation?: string;
+  include_basic_info?: boolean;
+  include_product_program?: boolean;
+  include_executive_summary?: boolean;
+  include_technical_architecture?: boolean;
+  include_implementation_roadmap?: boolean;
   regression_trigger?: string;
   assigned_agents?: { name: string; agent_id: string }[];
 }
@@ -158,6 +173,31 @@ export function updateWatchdogSettings(
   if (updates.regression_trigger !== undefined) {
     fields.push('regression_trigger = ?');
     values.push(updates.regression_trigger);
+  }
+  // Task creation context fields
+  if (updates.additional_prompt_task_creation !== undefined) {
+    fields.push('additional_prompt_task_creation = ?');
+    values.push(updates.additional_prompt_task_creation);
+  }
+  if (updates.include_basic_info !== undefined) {
+    fields.push('include_basic_info = ?');
+    values.push(updates.include_basic_info ? 1 : 0);
+  }
+  if (updates.include_product_program !== undefined) {
+    fields.push('include_product_program = ?');
+    values.push(updates.include_product_program ? 1 : 0);
+  }
+  if (updates.include_executive_summary !== undefined) {
+    fields.push('include_executive_summary = ?');
+    values.push(updates.include_executive_summary ? 1 : 0);
+  }
+  if (updates.include_technical_architecture !== undefined) {
+    fields.push('include_technical_architecture = ?');
+    values.push(updates.include_technical_architecture ? 1 : 0);
+  }
+  if (updates.include_implementation_roadmap !== undefined) {
+    fields.push('include_implementation_roadmap = ?');
+    values.push(updates.include_implementation_roadmap ? 1 : 0);
   }
   if (updates.assigned_agents !== undefined) {
     fields.push('assigned_agents = ?');

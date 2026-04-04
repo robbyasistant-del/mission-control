@@ -20,6 +20,12 @@ function ensureTable() {
         regression_testing_enabled INTEGER DEFAULT 1,
         regression_trigger TEXT DEFAULT 'sprint finish',
         assigned_agents TEXT,
+        additional_prompt_task_creation TEXT,
+        include_basic_info INTEGER DEFAULT 1,
+        include_product_program INTEGER DEFAULT 1,
+        include_executive_summary INTEGER DEFAULT 1,
+        include_technical_architecture INTEGER DEFAULT 1,
+        include_implementation_roadmap INTEGER DEFAULT 1,
         is_running INTEGER DEFAULT 0,
         next_run_at TEXT,
         last_run_at TEXT,
@@ -75,6 +81,12 @@ export async function PUT(
       regression_testing_enabled: body.regression_testing_enabled,
       regression_trigger: body.regression_trigger,
       assigned_agents: body.assigned_agents,
+      additional_prompt_task_creation: body.additional_prompt_task_creation,
+      include_basic_info: body.include_basic_info,
+      include_product_program: body.include_product_program,
+      include_executive_summary: body.include_executive_summary,
+      include_technical_architecture: body.include_technical_architecture,
+      include_implementation_roadmap: body.include_implementation_roadmap,
     });
 
     return NextResponse.json({ settings });

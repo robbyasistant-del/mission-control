@@ -115,9 +115,11 @@ export default function AutopilotProductPage() {
   
   // Watchdog state
   const [watchdogSettings, setWatchdogSettings] = useState<any>(null);
+  const [watchdogForm, setWatchdogForm] = useState<any>(null);
   const [watchdogLogs, setWatchdogLogs] = useState<any[]>([]);
   const [watchdogCountdown, setWatchdogCountdown] = useState(0);
   const [isWatchdogRunning, setIsWatchdogRunning] = useState(false);
+  const [isSavingWatchdog, setIsSavingWatchdog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
@@ -421,7 +423,19 @@ export default function AutopilotProductPage() {
           };
         }
         
+        // Initialize form with defaults for new fields
+        settings = {
+          additional_prompt_task_creation: '',
+          include_basic_info: true,
+          include_product_program: true,
+          include_executive_summary: true,
+          include_technical_architecture: true,
+          include_implementation_roadmap: true,
+          ...settings
+        };
+        
         setWatchdogSettings(settings);
+        setWatchdogForm({ ...settings });
         setIsWatchdogRunning(settings?.is_running || false);
       }
     } catch (err) {
@@ -461,20 +475,28 @@ export default function AutopilotProductPage() {
     }
   };
 
-  const updateWatchdogSettings = async (settings: any) => {
-    if (!product) return;
+  const updateWatchdogForm = (updates: any) => {
+    setWatchdogForm((prev: any) => ({ ...prev, ...updates }));
+  };
+
+  const saveWatchdogSettings = async () => {
+    if (!product || !watchdogForm) return;
+    setIsSavingWatchdog(true);
     try {
       const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(watchdogForm),
       });
       if (res.ok) {
         const data = await res.json();
         setWatchdogSettings(data.settings);
+        setWatchdogForm(data.settings);
       }
     } catch (err) {
       console.error('Failed to update watchdog settings:', err);
+    } finally {
+      setIsSavingWatchdog(false);
     }
   };
 
@@ -1131,14 +1153,19 @@ export default function AutopilotProductPage() {
               </div>
 
               {/* Watchdog Settings */}
-              <div className="bg-mc-bg-secondary rounded-lg border border-mc-border p-4 flex-1">
+              <div className="bg-mc-bg-secondary rounded-lg border border-mc-border p-4 flex-1 overflow-auto">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-md font-semibold text-mc-text">Watchdog Settings</h3>
                   <button
-                    onClick={() => updateWatchdogSettings(watchdogSettings)}
-                    className="px-3 py-1.5 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 flex items-center gap-1"
+                    onClick={saveWatchdogSettings}
+                    disabled={isSavingWatchdog}
+                    className="px-3 py-1.5 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-1"
                   >
-                    <Save className="w-4 h-4" /> Save
+                    {isSavingWatchdog ? (
+                      <><Loader className="w-4 h-4 animate-spin" /> Saving...</>
+                    ) : (
+                      <><Save className="w-4 h-4" /> Save</>
+                    )}
                   </button>
                 </div>
                 
@@ -1148,8 +1175,8 @@ export default function AutopilotProductPage() {
                     <label className="block text-xs text-mc-text-secondary mb-1">Dashboard URL</label>
                     <input
                       type="text"
-                      value={watchdogSettings?.dashboard_url || ''}
-                      onChange={(e) => updateWatchdogSettings({ dashboard_url: e.target.value })}
+                      value={watchdogForm?.dashboard_url || ''}
+                      onChange={(e) => updateWatchdogForm({ dashboard_url: e.target.value })}
                       placeholder="https://..."
                       className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
                     />
@@ -1159,8 +1186,8 @@ export default function AutopilotProductPage() {
                   <div>
                     <label className="block text-xs text-mc-text-secondary mb-1">Check Interval</label>
                     <select
-                      value={watchdogSettings?.interval_seconds || 300}
-                      onChange={(e) => updateWatchdogSettings({ interval_seconds: parseInt(e.target.value) })}
+                      value={watchdogForm?.interval_seconds || 300}
+                      onChange={(e) => updateWatchdogForm({ interval_seconds: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
                     >
                       <option value={30}>30 seconds</option>
@@ -1179,8 +1206,8 @@ export default function AutopilotProductPage() {
                   <div>
                     <label className="block text-xs text-mc-text-secondary mb-1">New Task Priority</label>
                     <select
-                      value={watchdogSettings?.new_task_priority || 'normal'}
-                      onChange={(e) => updateWatchdogSettings({ new_task_priority: e.target.value })}
+                      value={watchdogForm?.new_task_priority || 'normal'}
+                      onChange={(e) => updateWatchdogForm({ new_task_priority: e.target.value })}
                       className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
                     >
                       <option value="low">Low</option>
@@ -1190,13 +1217,81 @@ export default function AutopilotProductPage() {
                     </select>
                   </div>
 
+                  {/* Additional Prompt for Task Creation */}
+                  <div className="col-span-2">
+                    <label className="block text-xs text-mc-text-secondary mb-1">Additional Prompt for Task Creation</label>
+                    <textarea
+                      value={watchdogForm?.additional_prompt_task_creation || ''}
+                      onChange={(e) => updateWatchdogForm({ additional_prompt_task_creation: e.target.value })}
+                      placeholder="Add any specific instructions for task creation..."
+                      rows={5}
+                      className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+                    />
+                  </div>
+
+                  {/* Include Components Section */}
+                  <div className="col-span-2">
+                    <label className="block text-xs text-mc-text-secondary mb-2">Include in Task Creation Context:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer bg-mc-bg rounded p-2 border border-mc-border">
+                        <input
+                          type="checkbox"
+                          checked={watchdogForm?.include_basic_info !== false}
+                          onChange={(e) => updateWatchdogForm({ include_basic_info: e.target.checked })}
+                          className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                        />
+                        <span className="text-sm text-mc-text">Basic Info</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-mc-bg rounded p-2 border border-mc-border">
+                        <input
+                          type="checkbox"
+                          checked={watchdogForm?.include_product_program !== false}
+                          onChange={(e) => updateWatchdogForm({ include_product_program: e.target.checked })}
+                          className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                        />
+                        <span className="text-sm text-mc-text">Product Program</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-mc-bg rounded p-2 border border-mc-border">
+                        <input
+                          type="checkbox"
+                          checked={watchdogForm?.include_executive_summary !== false}
+                          onChange={(e) => updateWatchdogForm({ include_executive_summary: e.target.checked })}
+                          className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                        />
+                        <span className="text-sm text-mc-text">Executive Summary</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-mc-bg rounded p-2 border border-mc-border">
+                        <input
+                          type="checkbox"
+                          checked={watchdogForm?.include_technical_architecture !== false}
+                          onChange={(e) => updateWatchdogForm({ include_technical_architecture: e.target.checked })}
+                          className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                        />
+                        <span className="text-sm text-mc-text">Technical Architecture</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-mc-bg rounded p-2 border border-mc-border col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={watchdogForm?.include_implementation_roadmap !== false}
+                          onChange={(e) => updateWatchdogForm({ include_implementation_roadmap: e.target.checked })}
+                          className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+                        />
+                        <span className="text-sm text-mc-text">Implementation Roadmap</span>
+                      </label>
+                    </div>
+                  </div>
+
                   {/* Checkboxes */}
-                  <div className="col-span-2 space-y-2">
+                  <div className="col-span-2 space-y-2 pt-2 border-t border-mc-border">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={watchdogSettings?.auto_nudge_stuck !== false}
-                        onChange={(e) => updateWatchdogSettings({ auto_nudge_stuck: e.target.checked })}
+                        checked={watchdogForm?.auto_nudge_stuck !== false}
+                        onChange={(e) => updateWatchdogForm({ auto_nudge_stuck: e.target.checked })}
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Auto-nudge stuck tasks</span>
@@ -1205,8 +1300,8 @@ export default function AutopilotProductPage() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={watchdogSettings?.notify_new_task !== false}
-                        onChange={(e) => updateWatchdogSettings({ notify_new_task: e.target.checked })}
+                        checked={watchdogForm?.notify_new_task !== false}
+                        onChange={(e) => updateWatchdogForm({ notify_new_task: e.target.checked })}
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Notify on Telegram when new task created</span>
@@ -1215,14 +1310,14 @@ export default function AutopilotProductPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={watchdogSettings?.notify_status_change === true}
-                        onChange={(e) => updateWatchdogSettings({ notify_status_change: e.target.checked })}
+                        checked={watchdogForm?.notify_status_change === true}
+                        onChange={(e) => updateWatchdogForm({ notify_status_change: e.target.checked })}
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Notify on Telegram when task status changes to:</span>
                       <select
-                        value={watchdogSettings?.notify_statuses || 'done'}
-                        onChange={(e) => updateWatchdogSettings({ notify_statuses: [e.target.value] })}
+                        value={watchdogForm?.notify_statuses || 'done'}
+                        onChange={(e) => updateWatchdogForm({ notify_statuses: [e.target.value] })}
                         className="px-2 py-1 bg-mc-bg border border-mc-border rounded text-sm text-mc-text focus:outline-none focus:border-mc-accent"
                       >
                         <option value="done">done</option>
@@ -1234,8 +1329,8 @@ export default function AutopilotProductPage() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={watchdogSettings?.stop_on_sprint_finish === true}
-                        onChange={(e) => updateWatchdogSettings({ stop_on_sprint_finish: e.target.checked })}
+                        checked={watchdogForm?.stop_on_sprint_finish === true}
+                        onChange={(e) => updateWatchdogForm({ stop_on_sprint_finish: e.target.checked })}
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Stop watchdog when sprint finishes</span>
@@ -1244,14 +1339,14 @@ export default function AutopilotProductPage() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={watchdogSettings?.regression_testing_enabled !== false}
-                        onChange={(e) => updateWatchdogSettings({ regression_testing_enabled: e.target.checked })}
+                        checked={watchdogForm?.regression_testing_enabled !== false}
+                        onChange={(e) => updateWatchdogForm({ regression_testing_enabled: e.target.checked })}
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Create regression testing tasks when:</span>
                       <select
-                        value={watchdogSettings?.regression_trigger || 'sprint finish'}
-                        onChange={(e) => updateWatchdogSettings({ regression_trigger: e.target.value })}
+                        value={watchdogForm?.regression_trigger || 'sprint finish'}
+                        onChange={(e) => updateWatchdogForm({ regression_trigger: e.target.value })}
                         className="ml-2 px-2 py-1 bg-mc-bg border border-mc-border rounded text-sm text-mc-text focus:outline-none focus:border-mc-accent"
                       >
                         <option value="sprint finish">Sprint finishes</option>
