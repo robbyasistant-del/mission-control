@@ -2,6 +2,9 @@ import { getDb } from '@/lib/db';
 import { getOrCreateWatchdogSettings, addWatchdogLog, WatchdogSettings } from '@/lib/db/autopilot-watchdog';
 import { getAutopilotProduct, AutopilotProduct } from '@/lib/db/autopilot-products';
 import { getNextPendingTask, getCurrentTask, updateAutopilotTask, AutopilotTask, listAutopilotTasksByProduct } from '@/lib/db/autopilot-sprints-tasks';
+import { getAutopilotPrompt, type PromptKey } from '@/lib/db/autopilot-prompts';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 // Lock para evitar ejecuciones paralelas del mismo producto
 const executionLocks = new Map<string, boolean>();
@@ -573,6 +576,7 @@ async function createMissionControlTask(
     // 1. Generar descripcion via LLM con timeout de 5 minutos
     console.log(`[Watchdog] Generating task description via LLM for: ${autopilotTask.title}`);
     const generatedDescription = await generateTaskDescriptionWithLLM(
+      product.id,
       autopilotTask,
       context,
       300000 // 5 minutos
@@ -641,28 +645,62 @@ interface CreateTaskParams {
   workspace_id?: string;
 }
 
-/**
- * Genera la descripcion de la tarea usando LLM via Gateway
- * Timeout: 5 minutos (300000ms)
- */
-async function generateTaskDescriptionWithLLM(
-  task: AutopilotTask,
-  context: string,
-  timeoutMs: number = 300000
-): Promise<string> {
-  const gatewayUrl = (process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333')
-    .replace('ws://', 'http://')
-    .replace('wss://', 'https://');
-  const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || '';
-  const model = process.env.WATCHDOG_LLM_MODEL || 'openclaw';
+const PROMPT_KEY_WATCHDOG: PromptKey = 'watchdog-task-description';
+
+async function getWatchdogPromptConfig(productId: string) {
+  // 1. Try to get from DB
+  const dbPrompt = getAutopilotPrompt(productId, PROMPT_KEY_WATCHDOG);
+  if (dbPrompt && dbPrompt.prompt_text) {
+    return {
+      prompt_text: dbPrompt.prompt_text,
+      model: dbPrompt.model,
+      temperature: dbPrompt.temperature,
+      max_tokens: dbPrompt.max_tokens,
+      timeout_ms: dbPrompt.timeout_ms,
+      system_prompt: dbPrompt.system_prompt,
+    };
+  }
   
-  console.log(`[Watchdog LLM] Starting generation for task: ${task.title}`);
-  console.log(`[Watchdog LLM] Gateway URL: ${gatewayUrl}`);
-  console.log(`[Watchdog LLM] Model: ${model}`);
-  console.log(`[Watchdog LLM] Timeout: ${timeoutMs}ms`);
-  console.log(`[Watchdog LLM] Token present: ${gatewayToken ? 'YES' : 'NO'}`);
-  
-  const prompt = `You are a technical project manager. Create a comprehensive task description with clear, atomic instructions.
+  // 2. Fallback: read from file
+  try {
+    const filepath = path.join(process.cwd(), 'prompts', '05-watchdog-task-description.md');
+    const content = await fs.readFile(filepath, 'utf-8');
+    
+    // Parse prompt text
+    const promptMatch = content.match(/## Prompt Template\s*\n\s*```(?:\w*\n|\n)?([\s\S]*?)```/);
+    const promptText = promptMatch ? promptMatch[1].trim() : '';
+    
+    // Parse config
+    const modelMatch = content.match(/- \*\*Model\*\*:\s*`?([^`\n]+)`?/);
+    const tempMatch = content.match(/- \*\*Temperature\*\*:\s*`?([^`\n]+)`?/);
+    const tokensMatch = content.match(/- \*\*Max Tokens\*\*:\s*`?([^`\n]+)`?/);
+    const timeoutMatch = content.match(/- \*\*Timeout\*\*:\s*`?([^`\n\(]+)`?/);
+    const systemMatch = content.match(/- \*\*System Prompt\*\*:\s*`?([^`\n]+)`?/);
+    
+    return {
+      prompt_text: promptText,
+      model: modelMatch ? modelMatch[1].trim() : 'openclaw',
+      temperature: tempMatch ? parseFloat(tempMatch[1]) : 0.3,
+      max_tokens: tokensMatch ? parseInt(tokensMatch[1]) : 4000,
+      timeout_ms: timeoutMatch ? parseInt(timeoutMatch[1]) : 300000,
+      system_prompt: systemMatch ? systemMatch[1].trim() : 'You are a technical project manager creating clear, actionable task descriptions for developers.',
+    };
+  } catch (error) {
+    console.error('[Watchdog] Failed to read prompt file:', error);
+    // 3. Final fallback: hardcoded defaults
+    return {
+      prompt_text: '',
+      model: 'openclaw',
+      temperature: 0.3,
+      max_tokens: 4000,
+      timeout_ms: 300000,
+      system_prompt: 'You are a technical project manager creating clear, actionable task descriptions for developers.',
+    };
+  }
+}
+
+function buildFallbackWatchdogPrompt(task: AutopilotTask, context: string): string {
+  return `You are a technical project manager. Create a comprehensive task description with clear, atomic instructions.
 
 TASK TO IMPLEMENT:
 - Title: ${task.title}
@@ -707,9 +745,46 @@ Example format:
 - Code follows project conventions
 
 Be CONCISE but COMPLETE. The agent must know EXACTLY what to build.`;
+}
+
+/**
+ * Genera la descripcion de la tarea usando LLM via Gateway
+ * Timeout: 5 minutos (300000ms)
+ */
+async function generateTaskDescriptionWithLLM(
+  productId: string,
+  task: AutopilotTask,
+  context: string,
+  timeoutMs: number = 300000
+): Promise<string> {
+  const gatewayUrl = (process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333')
+    .replace('ws://', 'http://')
+    .replace('wss://', 'https://');
+  const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || '';
+  
+  // Get config from DB or file
+  const config = await getWatchdogPromptConfig(productId);
+  
+  console.log(`[Watchdog LLM] Starting generation for task: ${task.title}`);
+  console.log(`[Watchdog LLM] Gateway URL: ${gatewayUrl}`);
+  console.log(`[Watchdog LLM] Model: ${config.model}`);
+  console.log(`[Watchdog LLM] Timeout: ${config.timeout_ms}ms`);
+  console.log(`[Watchdog LLM] Token present: ${gatewayToken ? 'YES' : 'NO'}`);
+  
+  // Build the final prompt
+  const promptText = config.prompt_text || buildFallbackWatchdogPrompt(task, context);
+  
+  // Replace variables in prompt text if they exist
+  const finalPrompt = promptText
+    .replace(/\{\{task_title\}\}/g, task.title || '')
+    .replace(/\{\{task_agent_role\}\}/g, task.agent_role || '')
+    .replace(/\{\{task_description\}\}/g, task.description_text || '')
+    .replace(/\{\{task_deliverables\}\}/g, task.deliverables || '')
+    .replace(/\{\{task_quality_criteria\}\}/g, task.quality_criteria || '')
+    .replace(/\{\{context\}\}/g, context || '');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), config.timeout_ms);
   const startTime = Date.now();
 
   try {
@@ -723,13 +798,13 @@ Be CONCISE but COMPLETE. The agent must know EXACTLY what to build.`;
         'Authorization': `Bearer ${gatewayToken}`,
       },
       body: JSON.stringify({
-        model: model,
+        model: config.model,
         messages: [
-          { role: 'system', content: 'You are a technical project manager creating clear, actionable task descriptions for developers.' },
-          { role: 'user', content: prompt }
+          { role: 'system', content: config.system_prompt },
+          { role: 'user', content: finalPrompt }
         ],
-        temperature: 0.3,
-        max_tokens: 4000,
+        temperature: config.temperature,
+        max_tokens: config.max_tokens,
       }),
       signal: controller.signal,
     });
