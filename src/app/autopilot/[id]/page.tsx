@@ -528,6 +528,18 @@ export default function AutopilotProductPage() {
     }
   }, [activeTab, product]);
 
+  // Auto-refresh Last Run and Event Log every 3 seconds when watchdog tab is active
+  useEffect(() => {
+    if (activeTab !== 'watchdog' || !product) return;
+
+    const interval = setInterval(() => {
+      loadWatchdogLogs();
+      loadWatchdogTasks();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeTab, product?.id]);
+
   // Watchdog SSE connection for real-time countdown
   useEffect(() => {
     if (!product || activeTab !== 'watchdog') return;
