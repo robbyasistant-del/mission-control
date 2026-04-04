@@ -204,7 +204,7 @@ async function checkExistingTasks(context: ExecutionContext): Promise<TaskCheckR
   if (activeTasks.length > 0) {
     return {
       shouldContinue: false,
-      message: `${activeTasks.length} active tasks in progress`,
+      message: `${activeTasks.length} active task(s) in progress, do nothing`,
     };
   }
 
