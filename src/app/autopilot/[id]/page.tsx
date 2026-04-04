@@ -118,8 +118,8 @@ function PromptsTab() {
     max_tokens: 4096,
     timeout_ms: 300000,
     system_prompt: '',
-    is_enabled: true,
   });
+  const [resetting, setResetting] = useState(false);
 
   // Load prompt from file when active prompt changes
   useEffect(() => {
@@ -141,7 +141,6 @@ function PromptsTab() {
         max_tokens: data.config?.max_tokens || 4096,
         timeout_ms: data.config?.timeout_ms || 300000,
         system_prompt: data.config?.system_prompt || '',
-        is_enabled: true,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load prompt');
@@ -180,6 +179,31 @@ function PromptsTab() {
     await loadPromptFromFile(activePromptKey);
     setSuccess('Reloaded from file');
     setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const resetToDefault = async () => {
+    if (!confirm('Reset to default? All changes will be lost and the original prompt will be restored.')) return;
+    
+    try {
+      setResetting(true);
+      setError(null);
+      setSuccess(null);
+      
+      const res = await fetch(`/api/prompts/${activePromptKey}`, {
+        method: 'PUT',
+      });
+      
+      if (!res.ok) throw new Error('Failed to reset prompt');
+      
+      // Reload the prompt after reset
+      await loadPromptFromFile(activePromptKey);
+      setSuccess('Reset to default successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset prompt');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const activePromptInfo = PROMPT_KEYS.find(p => p.key === activePromptKey);
@@ -241,7 +265,15 @@ function PromptsTab() {
               className="flex items-center gap-2 px-3 py-2 text-sm text-mc-text-secondary hover:text-mc-text bg-mc-bg-secondary hover:bg-mc-border border border-mc-border rounded-lg transition-colors disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4" />
-              {loading ? 'Reloading...' : 'Reload from File'}
+              {loading ? 'Reloading...' : 'Reload'}
+            </button>
+            <button
+              onClick={resetToDefault}
+              disabled={resetting}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RotateCcw className="w-4 h-4" />
+              {resetting ? 'Resetting...' : 'Reset to Default'}
             </button>
             <button
               onClick={savePrompt}
@@ -337,31 +369,6 @@ function PromptsTab() {
             <p className="text-xs text-mc-text-secondary mt-1">Defines the AI&apos;s role and behavior</p>
           </div>
 
-          {/* Info Box */}
-          <div className="bg-mc-bg rounded-lg p-4 border border-mc-border space-y-2">
-            <h4 className="text-sm font-medium text-mc-text">About These Settings</h4>
-            <div className="space-y-1">
-              <p className="text-xs text-mc-text-secondary">
-                <strong className="text-mc-text">System Prompt:</strong> Sets the AI&apos;s behavior and role context before the main prompt. 
-                Think of it as the &quot;personality&quot; or &quot;job description&quot; for the AI during this conversation.
-              </p>
-              <p className="text-xs text-mc-text-secondary">
-                <strong className="text-mc-text">Enable this prompt:</strong> When checked, this prompt will be used for new generations. 
-                Uncheck to temporarily disable without deleting your work.
-              </p>
-            </div>
-          </div>
-
-          {/* Enabled toggle */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.is_enabled}
-              onChange={(e) => setForm(f => ({ ...f, is_enabled: e.target.checked }))}
-              className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
-            />
-            <span className="text-sm text-mc-text">Enable this prompt</span>
-          </label>
         </div>
 
         {/* Prompt Text */}

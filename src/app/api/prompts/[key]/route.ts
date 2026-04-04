@@ -148,3 +148,46 @@ export async function POST(
     );
   }
 }
+
+// PUT /api/prompts/[key] - Reset to default (from .backup file)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { key: string } }
+) {
+  try {
+    const { key } = await Promise.resolve(params);
+    const filename = PROMPT_FILES[key];
+    
+    if (!filename) {
+      return NextResponse.json(
+        { error: 'Invalid prompt key' },
+        { status: 400 }
+      );
+    }
+    
+    const filepath = path.join(process.cwd(), 'prompts', filename);
+    const backupPath = `${filepath}.backup`;
+    
+    // Check if backup exists
+    try {
+      await fs.access(backupPath);
+    } catch {
+      return NextResponse.json(
+        { error: 'Backup file not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Copy backup to main file
+    const backupContent = await fs.readFile(backupPath, 'utf-8');
+    await fs.writeFile(filepath, backupContent, 'utf-8');
+    
+    return NextResponse.json({ success: true, key, message: 'Reset to default' });
+  } catch (error) {
+    console.error('Failed to reset prompt file:', error);
+    return NextResponse.json(
+      { error: 'Failed to reset prompt file' },
+      { status: 500 }
+    );
+  }
+}
