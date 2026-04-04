@@ -103,7 +103,7 @@ const PROMPT_KEYS = [
 type PromptKey = typeof PROMPT_KEYS[number]['key'];
 
 // Prompts Tab Component
-function PromptsTab() {
+function PromptsTab({ productId }: { productId: string }) {
   const [activePromptKey, setActivePromptKey] = useState<PromptKey>('product-program');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -155,30 +155,29 @@ function PromptsTab() {
       setError(null);
       setSuccess(null);
       
-      const res = await fetch(`/api/prompts/${activePromptKey}`, {
+      const res = await fetch(`/api/autopilot/products/${productId}/prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          prompt_key: activePromptKey,
           prompt_text: form.prompt_text,
+          model: form.model,
+          temperature: form.temperature,
+          max_tokens: form.max_tokens,
+          timeout_ms: form.timeout_ms,
+          system_prompt: form.system_prompt,
         }),
       });
       
       if (!res.ok) throw new Error('Failed to save prompt');
       
-      setSuccess('Prompt saved to file successfully');
+      setSuccess('Prompt saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save prompt');
     } finally {
       setSaving(false);
     }
-  };
-
-  const reloadFromFile = async () => {
-    if (!confirm('Reload from file? Unsaved changes will be lost.')) return;
-    await loadPromptFromFile(activePromptKey);
-    setSuccess('Reloaded from file');
-    setTimeout(() => setSuccess(null), 3000);
   };
 
   const resetToDefault = async () => {
@@ -259,14 +258,6 @@ function PromptsTab() {
                 {success}
               </span>
             )}
-            <button
-              onClick={reloadFromFile}
-              disabled={loading}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-mc-text-secondary hover:text-mc-text bg-mc-bg-secondary hover:bg-mc-border border border-mc-border rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {loading ? 'Reloading...' : 'Reload'}
-            </button>
             <button
               onClick={resetToDefault}
               disabled={resetting}
@@ -1785,8 +1776,8 @@ export default function AutopilotProductPage() {
           </div>
         )}
 
-        {activeTab === 'prompts' && (
-          <PromptsTab />
+        {activeTab === 'prompts' && product && (
+          <PromptsTab productId={product.id} />
         )}
 
       </main>

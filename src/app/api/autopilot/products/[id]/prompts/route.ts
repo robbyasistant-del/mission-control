@@ -36,13 +36,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// POST /api/autopilot/products/[id]/prompts - Update a prompt
+// POST /api/autopilot/products/[id]/prompts - Update a prompt (file + DB)
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: productId } = await params;
     const body = await request.json();
     
-    const { prompt_key, prompt_text, model, temperature, max_tokens, timeout_ms, system_prompt, is_enabled } = body;
+    const { prompt_key, prompt_text, model, temperature, max_tokens, timeout_ms, system_prompt } = body;
     
     if (!prompt_key || !PROMPT_KEYS.includes(prompt_key as PromptKey)) {
       return NextResponse.json(
@@ -51,6 +51,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     
+    // 1. Save to file
+    const filename = `${prompt_key}.md`;
+    const filepath = path.join(process.cwd(), 'prompts', filename);
+    
+    // Read existing file to preserve header/config
+    let existingContent = '';
+    try {
+      existingContent = await fs.readFile(filepath, 'utf-8');
+    } catch {
+      // File doesn't exist, will create new
+    }
+    
+    // Extract header (everything before ## Prompt Template)
+    const headerMatch = existingContent.match(/^[\s\S]*?(?=## Prompt Template)/);
+    const header = headerMatch ? headerMatch[0] : `# ${prompt_key.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}\n\n`;
+    
+    // Build new content with updated config
+    const newContent = `${header}## Prompt Template\n\n\`\`\`\n${prompt_text}\n\`\`\`\n`;
+    
+    await fs.writeFile(filepath, newContent, 'utf-8');
+    
+    // 2. Save to database
     const prompt = upsertAutopilotPrompt(productId, prompt_key as PromptKey, {
       prompt_text,
       model,
@@ -58,10 +80,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       max_tokens,
       timeout_ms,
       system_prompt,
-      is_enabled,
+      is_enabled: true,
     });
     
-    return NextResponse.json({ prompt });
+    return NextResponse.json({ prompt, saved_to_file: true });
   } catch (error) {
     console.error('Failed to update prompt:', error);
     return NextResponse.json(
