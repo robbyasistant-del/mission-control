@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save, CheckCircle } from 'lucide-react';
+import { ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save, CheckCircle, MessageSquare, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { MainNav } from '@/components/MainNav';
 
@@ -39,7 +39,7 @@ interface AutopilotProduct {
   created_at: string;
 }
 
-type Tab = 'basics' | 'program' | 'workflow' | 'watchdog';
+type Tab = 'basics' | 'program' | 'workflow' | 'watchdog' | 'prompts';
 type WorkflowStep = 'program' | 'executive-summary' | 'technical-architecture' | 'implementation-roadmap' | 'sprints-tasks';
 
 const WORKFLOW_STEPS: { id: WorkflowStep; label: string; state: WorkflowState }[] = [
@@ -89,6 +89,338 @@ function isStepCompleted(stepIndex: number, currentState: WorkflowState | undefi
 function getNextState(stepId: WorkflowStep): WorkflowState {
   const step = WORKFLOW_STEPS.find(s => s.id === stepId);
   return step?.state ?? 'initial';
+}
+
+// Prompt Key type for the prompts tab
+const PROMPT_KEYS = [
+  { key: 'product-program', label: 'Product Program', description: 'Generates the initial Product Requirements Document (PRD)' },
+  { key: 'executive-summary', label: 'Executive Summary', description: 'Creates a strategic executive summary from the PRD' },
+  { key: 'technical-architecture', label: 'Technical Architecture', description: 'Generates technical architecture documentation' },
+  { key: 'implementation-roadmap', label: 'Implementation Roadmap', description: 'Creates detailed sprint-based implementation roadmap' },
+  { key: 'watchdog-task-description', label: 'Watchdog Task Description', description: 'Generates task descriptions when watchdog creates tasks' },
+  { key: 'research-cycle', label: 'Research Cycle', description: 'Analyzes product for improvement opportunities (Autopilot Classic)' },
+  { key: 'ideation-cycle', label: 'Ideation Cycle', description: 'Generates feature ideas based on research (Autopilot Classic)' },
+] as const;
+
+type PromptKey = typeof PROMPT_KEYS[number]['key'];
+
+// Prompts Tab Component
+function PromptsTab({ productId }: { productId: string }) {
+  const [prompts, setPrompts] = useState<Record<string, any>>({});
+  const [activePromptKey, setActivePromptKey] = useState<PromptKey>('product-program');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Form state for the active prompt
+  const [form, setForm] = useState({
+    prompt_text: '',
+    model: 'openclaw',
+    temperature: 0.7,
+    max_tokens: 4096,
+    timeout_ms: 300000,
+    system_prompt: '',
+    is_enabled: true,
+  });
+
+  // Load prompts on mount
+  useEffect(() => {
+    loadPrompts();
+  }, [productId]);
+
+  // Update form when active prompt changes
+  useEffect(() => {
+    const prompt = prompts[activePromptKey];
+    if (prompt) {
+      setForm({
+        prompt_text: prompt.prompt_text || '',
+        model: prompt.model || 'openclaw',
+        temperature: prompt.temperature ?? 0.7,
+        max_tokens: prompt.max_tokens || 4096,
+        timeout_ms: prompt.timeout_ms || 300000,
+        system_prompt: prompt.system_prompt || '',
+        is_enabled: prompt.is_enabled !== false,
+      });
+    }
+  }, [activePromptKey, prompts]);
+
+  const loadPrompts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`/api/autopilot/products/${productId}/prompts`);
+      if (!res.ok) throw new Error('Failed to load prompts');
+      const data = await res.json();
+      
+      // Convert array to record
+      const promptsRecord: Record<string, any> = {};
+      data.prompts.forEach((p: any) => {
+        promptsRecord[p.prompt_key] = p;
+      });
+      setPrompts(promptsRecord);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load prompts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const savePrompt = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+      
+      const res = await fetch(`/api/autopilot/products/${productId}/prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt_key: activePromptKey,
+          ...form,
+        }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to save prompt');
+      const data = await res.json();
+      
+      // Update local state
+      setPrompts(prev => ({
+        ...prev,
+        [activePromptKey]: data.prompt,
+      }));
+      setSuccess('Prompt saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save prompt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetToDefault = async () => {
+    if (!confirm('Reset this prompt to default? All changes will be lost.')) return;
+    
+    try {
+      setResetting(true);
+      setError(null);
+      setSuccess(null);
+      
+      const res = await fetch(`/api/autopilot/products/${productId}/prompts/reset`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt_key: activePromptKey }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to reset prompt');
+      const data = await res.json();
+      
+      // Update local state
+      setPrompts(prev => ({
+        ...prev,
+        [activePromptKey]: data.prompt,
+      }));
+      setSuccess('Prompt reset to default');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset prompt');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const activePromptInfo = PROMPT_KEYS.find(p => p.key === activePromptKey);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader className="w-8 h-8 animate-spin text-mc-accent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Left sidebar - Prompt list */}
+      <div className="lg:col-span-1 space-y-2">
+        <h3 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide mb-4">LLM Prompts</h3>
+        {PROMPT_KEYS.map((prompt) => {
+          const promptData = prompts[prompt.key];
+          const isActive = activePromptKey === prompt.key;
+          const isEnabled = promptData?.is_enabled !== false;
+          
+          return (
+            <button
+              key={prompt.key}
+              onClick={() => setActivePromptKey(prompt.key)}
+              className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                isActive
+                  ? 'bg-mc-accent/10 border-mc-accent text-mc-accent'
+                  : 'bg-mc-bg-secondary border-mc-border text-mc-text hover:border-mc-accent/50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-green-400' : 'bg-gray-400'}`} />
+                <span className="font-medium text-sm">{prompt.label}</span>
+              </div>
+              <p className="text-xs text-mc-text-secondary mt-1 line-clamp-2">{prompt.description}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Right content - Prompt editor */}
+      <div className="lg:col-span-3 space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-mc-text">{activePromptInfo?.label}</h2>
+            <p className="text-sm text-mc-text-secondary mt-1">{activePromptInfo?.description}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {success && (
+              <span className="text-sm text-green-400 flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" />
+                {success}
+              </span>
+            )}
+            <button
+              onClick={resetToDefault}
+              disabled={resetting}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-mc-text-secondary hover:text-mc-text bg-mc-bg-secondary hover:bg-mc-border border border-mc-border rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RotateCcw className="w-4 h-4" />
+              {resetting ? 'Resetting...' : 'Reset to Default'}
+            </button>
+            <button
+              onClick={savePrompt}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-mc-bg bg-mc-accent hover:bg-mc-accent/90 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save Prompt'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Configuration */}
+        <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide">Configuration</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Model */}
+            <div>
+              <label className="block text-sm text-mc-text-secondary mb-1">Model</label>
+              <input
+                type="text"
+                value={form.model}
+                onChange={(e) => setForm(f => ({ ...f, model: e.target.value }))}
+                className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                placeholder="e.g., openclaw or anthropic/claude-sonnet-4-6"
+              />
+              <p className="text-xs text-mc-text-secondary mt-1">Gateway model identifier</p>
+            </div>
+
+            {/* Temperature */}
+            <div>
+              <label className="block text-sm text-mc-text-secondary mb-1">Temperature</label>
+              <input
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                value={form.temperature}
+                onChange={(e) => setForm(f => ({ ...f, temperature: parseFloat(e.target.value) }))}
+                className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+              />
+              <p className="text-xs text-mc-text-secondary mt-1">0.0 = deterministic, 2.0 = creative</p>
+            </div>
+
+            {/* Max Tokens */}
+            <div>
+              <label className="block text-sm text-mc-text-secondary mb-1">Max Tokens</label>
+              <input
+                type="number"
+                min="100"
+                max="32000"
+                step="100"
+                value={form.max_tokens}
+                onChange={(e) => setForm(f => ({ ...f, max_tokens: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+              />
+              <p className="text-xs text-mc-text-secondary mt-1">Maximum output length</p>
+            </div>
+
+            {/* Timeout */}
+            <div>
+              <label className="block text-sm text-mc-text-secondary mb-1">Timeout (ms)</label>
+              <input
+                type="number"
+                min="10000"
+                max="600000"
+                step="10000"
+                value={form.timeout_ms}
+                onChange={(e) => setForm(f => ({ ...f, timeout_ms: parseInt(e.target.value) }))}
+                className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+              />
+              <p className="text-xs text-mc-text-secondary mt-1">Maximum wait time</p>
+            </div>
+          </div>
+
+          {/* System Prompt */}
+          <div>
+            <label className="block text-sm text-mc-text-secondary mb-1">System Prompt</label>
+            <textarea
+              value={form.system_prompt}
+              onChange={(e) => setForm(f => ({ ...f, system_prompt: e.target.value }))}
+              rows={2}
+              className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none"
+              placeholder="Optional system prompt to set the behavior context..."
+            />
+            <p className="text-xs text-mc-text-secondary mt-1">Defines the AI&apos;s role and behavior</p>
+          </div>
+
+          {/* Enabled toggle */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.is_enabled}
+              onChange={(e) => setForm(f => ({ ...f, is_enabled: e.target.checked }))}
+              className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
+            />
+            <span className="text-sm text-mc-text">Enable this prompt</span>
+          </label>
+        </div>
+
+        {/* Prompt Text */}
+        <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-mc-text-secondary uppercase tracking-wide">Prompt Template</h3>
+            <span className="text-xs text-mc-text-secondary">
+              Use {'{{variable}}'} syntax for dynamic values
+            </span>
+          </div>
+          <textarea
+            value={form.prompt_text}
+            onChange={(e) => setForm(f => ({ ...f, prompt_text: e.target.value }))}
+            rows={20}
+            className="w-full px-3 py-2 bg-mc-bg border border-mc-border rounded-lg text-sm text-mc-text font-mono focus:outline-none focus:border-mc-accent resize-y"
+            placeholder="Enter the prompt template here..."
+          />
+          <p className="text-xs text-mc-text-secondary">
+            Available variables depend on the prompt type. See the markdown file in /prompts for documentation.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AutopilotProductPage() {
@@ -598,6 +930,7 @@ export default function AutopilotProductPage() {
     { id: 'program', label: 'Product Program', icon: <FileText className="w-4 h-4" /> },
     { id: 'workflow', label: 'Product Workflow', icon: <Workflow className="w-4 h-4" /> },
     { id: 'watchdog', label: 'Run Watchdog', icon: <Activity className="w-4 h-4" /> },
+    { id: 'prompts', label: 'Prompts', icon: <MessageSquare className="w-4 h-4" /> },
   ];
 
   return (
@@ -1478,6 +1811,10 @@ export default function AutopilotProductPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'prompts' && (
+          <PromptsTab productId={product.id} />
         )}
 
       </main>
