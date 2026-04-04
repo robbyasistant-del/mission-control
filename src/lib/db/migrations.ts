@@ -1595,6 +1595,54 @@ const migrations: Migration[] = [
 
       console.log('[Migration 028] product_skills and skill_reports tables created');
     }
+  },
+  {
+    id: '029',
+    name: 'add_autopilot_sprints_tasks',
+    up: (db) => {
+      console.log('[Migration 029] Adding autopilot_sprints and autopilot_tasks tables...');
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS autopilot_sprints (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          sprint_number INTEGER NOT NULL,
+          phase_name TEXT NOT NULL,
+          phase_number INTEGER NOT NULL,
+          functionality_analysis TEXT,
+          features_description TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(product_id, sprint_number)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_autopilot_sprints_product ON autopilot_sprints(product_id, sprint_number)`);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS autopilot_tasks (
+          id TEXT PRIMARY KEY,
+          sprint_id TEXT NOT NULL REFERENCES autopilot_sprints(id) ON DELETE CASCADE,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          task_number INTEGER NOT NULL,
+          agent_role TEXT NOT NULL,
+          agent_name TEXT,
+          start_date TEXT,
+          end_date TEXT,
+          status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'blocked', 'testing', 'done')),
+          title TEXT NOT NULL,
+          description_text TEXT,
+          deliverables TEXT,
+          quality_criteria TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(sprint_id, task_number)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_autopilot_tasks_sprint ON autopilot_tasks(sprint_id, task_number)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_autopilot_tasks_product ON autopilot_tasks(product_id, status)`);
+
+      console.log('[Migration 029] autopilot_sprints and autopilot_tasks tables created');
+    }
   }
 ];
 

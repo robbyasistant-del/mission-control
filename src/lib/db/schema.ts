@@ -735,6 +735,40 @@ CREATE TABLE IF NOT EXISTS skill_reports (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Autopilot sprints for product workflow
+CREATE TABLE IF NOT EXISTS autopilot_sprints (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  sprint_number INTEGER NOT NULL,
+  phase_name TEXT NOT NULL,
+  phase_number INTEGER NOT NULL,
+  functionality_analysis TEXT,
+  features_description TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(product_id, sprint_number)
+);
+
+-- Autopilot tasks for product workflow
+CREATE TABLE IF NOT EXISTS autopilot_tasks (
+  id TEXT PRIMARY KEY,
+  sprint_id TEXT NOT NULL REFERENCES autopilot_sprints(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  task_number INTEGER NOT NULL,
+  agent_role TEXT NOT NULL,
+  agent_name TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'blocked', 'testing', 'done')),
+  title TEXT NOT NULL,
+  description_text TEXT,
+  deliverables TEXT,
+  quality_criteria TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(sprint_id, task_number)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned ON tasks(assigned_agent_id);

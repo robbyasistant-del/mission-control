@@ -5,13 +5,13 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save } from 'lucide-react';
 import Link from 'next/link';
 
-type WorkflowState = 
-  | 'initial' 
-  | 'program' 
-  | 'executive' 
-  | 'architecture' 
-  | 'roadmap' 
-  | 'planned' 
+type WorkflowState =
+  | 'initial'
+  | 'program'
+  | 'executive'
+  | 'architecture'
+  | 'roadmap'
+  | 'planned'
   | `sprint-${number}`;
 
 interface AutopilotProduct {
@@ -33,6 +33,7 @@ interface AutopilotProduct {
   build_mode?: string;
   default_branch?: string;
   workflow_state?: WorkflowState;
+  sprints_generated?: number;
   created_at: string;
 }
 
@@ -105,9 +106,11 @@ export default function AutopilotProductPage() {
   const [autoBuildingExecutive, setAutoBuildingExecutive] = useState(false);
   const [autoBuildingArch, setAutoBuildingArch] = useState(false);
   const [autoBuildingRoadmap, setAutoBuildingRoadmap] = useState(false);
+  const [generatingSprints, setGeneratingSprints] = useState(false);
   const [executiveCountdown, setExecutiveCountdown] = useState(300);
   const [archCountdown, setArchCountdown] = useState(300);
   const [roadmapCountdown, setRoadmapCountdown] = useState(300);
+  const [sprints, setSprints] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
@@ -352,6 +355,46 @@ export default function AutopilotProductPage() {
     }, 1000);
     return () => clearInterval(t);
   }, [autoBuildingRoadmap]);
+
+  useEffect(() => {
+    if (activeWorkflowStep === 'sprints-tasks' && product) {
+      loadSprints();
+    }
+  }, [activeWorkflowStep, product]);
+
+  const loadSprints = async () => {
+    if (!product) return;
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/sprints`);
+      if (res.ok) {
+        const data = await res.json();
+        setSprints(data.sprints || []);
+      }
+    } catch (err) {
+      console.error('Failed to load sprints:', err);
+    }
+  };
+
+  const handleGenerateSprints = async () => {
+    if (!product) return;
+    setGeneratingSprints(true);
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/generate-sprints-tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to generate sprints');
+      await loadSprints();
+      await loadProduct();
+      alert(`Generated ${data.sprintsGenerated} sprints with ${data.totalTasks} tasks`);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to generate sprints and tasks');
+    } finally {
+      setGeneratingSprints(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -783,47 +826,84 @@ export default function AutopilotProductPage() {
               )}
 
               {activeWorkflowStep === 'sprints-tasks' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-mc-text">Sprints & Tasks</h2>
-                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 5 of 5</span>
-                  </div>
-                  <p className="text-sm text-mc-text-secondary">Development sprints with tasks, agents, and status tracking.</p>
-                  
-                  {/* Sample Sprint Layout */}
-                  <div className="space-y-6">
-                    <div className="bg-mc-bg rounded-lg border border-mc-border p-4">
-                      <h3 className="font-semibold text-mc-text mb-3">Sprint 1: Foundation & Setup</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
-                          <span className="text-mc-accent font-mono">[rob_web]</span>
-                          <span className="text-mc-text-secondary font-mono">[2026-03-31 16:27]</span>
-                          <span className="text-mc-text-secondary font-mono">[2026-03-31 16:28]</span>
-                          <span className="text-green-400 font-mono">[done]</span>
-                          <span className="flex-1 text-mc-text">Technical architecture design</span>
-                          <input type="checkbox" checked className="accent-mc-accent" readOnly />
-                        </div>
-                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
-                          <span className="text-mc-accent font-mono">[rob_asogrowth]</span>
-                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
-                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
-                          <span className="text-yellow-400 font-mono">[pending]</span>
-                          <span className="flex-1 text-mc-text">Establish data quality checks</span>
-                          <input type="checkbox" className="accent-mc-accent" />
-                        </div>
-                        <div className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded">
-                          <span className="text-mc-accent font-mono">[rob_asogrowth]</span>
-                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
-                          <span className="text-mc-text-secondary font-mono">[TBD]</span>
-                          <span className="text-yellow-400 font-mono">[pending]</span>
-                          <span className="flex-1 text-mc-text">Create staging tables</span>
-                          <input type="checkbox" className="accent-mc-accent" />
-                        </div>
+                <div className="flex flex-col h-[calc(100vh-280px)] gap-4">
+                  {/* Top section - 15% - Generate button */}
+                  <div className="flex-[15] bg-mc-bg rounded-lg border border-mc-border p-4">
+                    <div className="flex items-center justify-between h-full">
+                      <div className="flex-1">
+                        <p className="text-sm text-mc-text-secondary">
+                          Load sprints and tasks into the database based on the Implementation Roadmap structure.
+                          This will parse all phases and sprints to create executable tasks.
+                        </p>
                       </div>
+                      <button
+                        onClick={handleGenerateSprints}
+                        disabled={generatingSprints || !product?.implementation_roadmap}
+                        className="px-4 py-3 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 whitespace-nowrap min-w-[160px] ml-4"
+                      >
+                        {generatingSprints ? 'Generating...' : 'Generate Sprints & Tasks'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bottom section - 85% - Sprints and tasks list */}
+                  <div className="flex-[85] overflow-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-lg font-semibold text-mc-text">Sprints & Tasks</h2>
+                        <p className="text-sm text-mc-text-secondary">Development sprints with tasks, agents, and status tracking.</p>
+                      </div>
+                      <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded border border-mc-border">Step 5 of 5</span>
                     </div>
 
-                    <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-8 text-center">
-                      <p className="text-mc-text-secondary text-sm">+ Add new sprint</p>
+                    {/* Status Legend */}
+                    <div className="flex flex-wrap gap-3 mb-4 text-xs">
+                      <span className="text-mc-text-secondary"><code className="bg-mc-bg-tertiary px-1 rounded">pending</code> → no iniciada</span>
+                      <span className="text-mc-text-secondary"><code className="bg-mc-bg-tertiary px-1 rounded">in_progress</code> → en curso</span>
+                      <span className="text-mc-text-secondary"><code className="bg-mc-bg-tertiary px-1 rounded">blocked</code> → bloqueada</span>
+                      <span className="text-mc-text-secondary"><code className="bg-mc-bg-tertiary px-1 rounded">testing</code> → en revision</span>
+                      <span className="text-mc-text-secondary"><code className="bg-mc-bg-tertiary px-1 rounded">done</code> → completada</span>
+                    </div>
+
+                    {/* Sprints list */}
+                    <div className="space-y-6">
+                      {sprints.length === 0 ? (
+                        <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-8 text-center">
+                          <p className="text-mc-text-secondary text-sm">No sprints generated yet. Click &quot;Generate Sprints & Tasks&quot; to parse the Implementation Roadmap.</p>
+                        </div>
+                      ) : (
+                        sprints.map((sprint) => (
+                          <div key={sprint.id} className="bg-mc-bg rounded-lg border border-mc-border p-4">
+                            <h3 className="font-semibold text-mc-text mb-3">
+                              ### Sprint #{sprint.sprint_number}: {sprint.phase_name}
+                            </h3>
+                            {sprint.tasks && sprint.tasks.length > 0 ? (
+                              <div className="space-y-2">
+                                <p className="text-sm text-mc-text-secondary font-medium">**Tasks:**</p>
+                                {sprint.tasks.map((task: any) => (
+                                  <div key={task.id} className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded text-sm">
+                                    <span className="text-mc-accent font-mono">[{task.agent_role}]</span>
+                                    <span className="text-mc-text-secondary font-mono">[{task.start_date || 'TBD'}]</span>
+                                    <span className="text-mc-text-secondary font-mono">[{task.end_date || 'TBD'}]</span>
+                                    <span className={`font-mono ${
+                                      task.status === 'done' ? 'text-green-400' :
+                                      task.status === 'in_progress' ? 'text-blue-400' :
+                                      task.status === 'blocked' ? 'text-red-400' :
+                                      task.status === 'testing' ? 'text-purple-400' :
+                                      'text-yellow-400'
+                                    }`}>
+                                      [{task.status}]
+                                    </span>
+                                    <span className="flex-1 text-mc-text">{task.title}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-mc-text-secondary">No tasks for this sprint.</p>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
