@@ -164,6 +164,30 @@ export function listAutopilotTasksByProduct(productId: string): AutopilotTask[] 
   );
 }
 
+export function getCurrentTask(productId: string): AutopilotTask | null {
+  // Get the most recently created task that is in_progress
+  return queryOne<AutopilotTask>(
+    `SELECT t.* FROM autopilot_tasks t
+     JOIN autopilot_sprints s ON t.sprint_id = s.id
+     WHERE t.product_id = ? AND t.status = 'in_progress'
+     ORDER BY t.created_at DESC
+     LIMIT 1`,
+    [productId]
+  ) ?? null;
+}
+
+export function getNextPendingTask(productId: string): AutopilotTask | null {
+  // Get the first pending task ordered by sprint and task number
+  return queryOne<AutopilotTask>(
+    `SELECT t.* FROM autopilot_tasks t
+     JOIN autopilot_sprints s ON t.sprint_id = s.id
+     WHERE t.product_id = ? AND t.status = 'pending'
+     ORDER BY s.sprint_number ASC, t.task_number ASC
+     LIMIT 1`,
+    [productId]
+  ) ?? null;
+}
+
 export function updateAutopilotTask(id: string, updates: Partial<AutopilotTask>): AutopilotTask | null {
   const existing = getAutopilotTask(id);
   if (!existing) return null;
