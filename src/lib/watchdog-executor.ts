@@ -525,6 +525,7 @@ async function createRegressionTestingTask(
       priority: 'urgent',
       assigned_agent_id: settings.assigned_agents ? JSON.parse(settings.assigned_agents)[0]?.agent_id : undefined,
       workspace_path: product.source_code_path || undefined,
+      workspace_id: product.workspace_id || undefined,
     });
 
     return {
@@ -577,6 +578,7 @@ async function createMissionControlTask(
       priority: 'urgent',
       assigned_agent_id: autopilotTask.agent_role, // Using agent_role as identifier
       workspace_path: product.source_code_path || undefined,
+      workspace_id: product.workspace_id || undefined,
     });
 
     return {
@@ -600,6 +602,7 @@ interface CreateTaskParams {
   priority: string;
   assigned_agent_id?: string;
   workspace_path?: string;
+  workspace_id?: string;
 }
 
 /**
@@ -612,22 +615,54 @@ async function createMissionControlTaskDirect(params: CreateTaskParams): Promise
   const taskId = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(
-    `INSERT INTO tasks (
-      id, title, description, status, priority, 
-      assigned_agent_id, workspace_path, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    taskId,
-    params.title,
-    params.description,
-    params.status,
-    params.priority,
-    params.assigned_agent_id || null,
-    params.workspace_path || null,
-    now,
-    now
-  );
+  // Verificar si workspace_id existe
+  if (params.workspace_id) {
+    const workspaceExists = db.prepare('SELECT 1 FROM workspaces WHERE id = ?').get(params.workspace_id);
+    if (!workspaceExists) {
+      console.warn(`[Watchdog] Workspace ${params.workspace_id} not found, creating without workspace_id`);
+      params.workspace_id = undefined;
+    }
+  }
+
+  // Intentar insertar sin FK constraints problemáticos
+  try {
+    db.prepare(
+      `INSERT INTO tasks (
+        id, title, description, status, priority, 
+        assigned_agent_id, workspace_path, workspace_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      taskId,
+      params.title,
+      params.description,
+      params.status,
+      params.priority,
+      params.assigned_agent_id || null,
+      params.workspace_path || null,
+      params.workspace_id || null,
+      now,
+      now
+    );
+  } catch (error) {
+    // Si falla por FK, intentar sin workspace_id
+    console.warn('[Watchdog] Failed with workspace_id, retrying without:', error);
+    db.prepare(
+      `INSERT INTO tasks (
+        id, title, description, status, priority, 
+        assigned_agent_id, workspace_path, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      taskId,
+      params.title,
+      params.description,
+      params.status,
+      params.priority,
+      params.assigned_agent_id || null,
+      params.workspace_path || null,
+      now,
+      now
+    );
+  }
 
   return taskId;
 }
