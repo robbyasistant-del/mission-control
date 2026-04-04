@@ -34,6 +34,7 @@ interface AutopilotProduct {
   default_branch?: string;
   workflow_state?: WorkflowState;
   sprints_generated?: number;
+  workspace_id?: string;
   created_at: string;
 }
 
@@ -409,8 +410,19 @@ export default function AutopilotProductPage() {
       const res = await fetch(`/api/autopilot/products/${product.id}/watchdog/settings`);
       if (res.ok) {
         const data = await res.json();
-        setWatchdogSettings(data.settings);
-        setIsWatchdogRunning(data.settings?.is_running || false);
+        let settings = data.settings;
+        
+        // Auto-populate dashboard URL from workspace if not set
+        if (!settings.dashboard_url && product.workspace_id) {
+          const workspaceSlug = product.workspace_id === 'default' ? 'default' : product.workspace_id;
+          settings = {
+            ...settings,
+            dashboard_url: `${window.location.origin}/workspace/${workspaceSlug}`
+          };
+        }
+        
+        setWatchdogSettings(settings);
+        setIsWatchdogRunning(settings?.is_running || false);
       }
     } catch (err) {
       console.error('Failed to load watchdog settings:', err);
@@ -1120,7 +1132,15 @@ export default function AutopilotProductPage() {
 
               {/* Watchdog Settings */}
               <div className="bg-mc-bg-secondary rounded-lg border border-mc-border p-4 flex-1">
-                <h3 className="text-md font-semibold text-mc-text mb-4">Watchdog Settings</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-md font-semibold text-mc-text">Watchdog Settings</h3>
+                  <button
+                    onClick={() => updateWatchdogSettings(watchdogSettings)}
+                    className="px-3 py-1.5 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 flex items-center gap-1"
+                  >
+                    <Save className="w-4 h-4" /> Save
+                  </button>
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   {/* Dashboard URL */}
@@ -1192,7 +1212,7 @@ export default function AutopilotProductPage() {
                       <span className="text-sm text-mc-text">Notify on Telegram when new task created</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={watchdogSettings?.notify_status_change === true}
@@ -1200,7 +1220,16 @@ export default function AutopilotProductPage() {
                         className="rounded border-mc-border text-mc-accent focus:ring-mc-accent"
                       />
                       <span className="text-sm text-mc-text">Notify on Telegram when task status changes to:</span>
-                    </label>
+                      <select
+                        value={watchdogSettings?.notify_statuses || 'done'}
+                        onChange={(e) => updateWatchdogSettings({ notify_statuses: [e.target.value] })}
+                        className="px-2 py-1 bg-mc-bg border border-mc-border rounded text-sm text-mc-text focus:outline-none focus:border-mc-accent"
+                      >
+                        <option value="done">done</option>
+                        <option value="blocked">blocked</option>
+                        <option value="testing">testing</option>
+                      </select>
+                    </div>
 
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1288,7 +1317,7 @@ export default function AutopilotProductPage() {
               <p className="text-mc-text-secondary">Activity tracking coming soon.</p>
             </div>
           </div>
-        )}],
+        )}
       </main>
     </div>
   );
