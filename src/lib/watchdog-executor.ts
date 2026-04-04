@@ -42,10 +42,13 @@ export async function executeWatchdogCycle(productId: string): Promise<{
 
   executionLocks.set(productId, true);
   const startTime = Date.now();
+  console.log(`[Watchdog ${productId}] ===== CYCLE START =====`);
 
   try {
     // Paso 1: Leer configuracion
+    console.log(`[Watchdog ${productId}] Step 1: Loading execution context...`);
     const context = await loadExecutionContext(productId);
+    console.log(`[Watchdog ${productId}] Context loaded: ${context ? 'YES' : 'NO'}`);
     if (!context) {
       return {
         success: false,
@@ -65,7 +68,9 @@ export async function executeWatchdogCycle(productId: string): Promise<{
     }
 
     // Paso 3: Crear nueva tarea
+    console.log(`[Watchdog ${productId}] Step 3: Creating next task...`);
     const creationResult = await createNextTask(context);
+    console.log(`[Watchdog ${productId}] Task creation result: success=${creationResult.success}, message=${creationResult.message}`);
     
     if (creationResult.shouldStopWatchdog) {
       return {
@@ -100,6 +105,7 @@ export async function executeWatchdogCycle(productId: string): Promise<{
     };
   } finally {
     executionLocks.delete(productId);
+    console.log(`[Watchdog ${productId}] ===== CYCLE END (${Date.now() - startTime}ms) =====`);
   }
 }
 
@@ -572,15 +578,25 @@ async function createMissionControlTask(
   autopilotTask: AutopilotTask,
   context: string
 ): Promise<TaskCreationResult> {
+  console.log(`[Watchdog] createMissionControlTask START for: ${autopilotTask.title}`);
   try {
     // 1. Generar descripcion via LLM con timeout de 5 minutos
     console.log(`[Watchdog] Generating task description via LLM for: ${autopilotTask.title}`);
-    const generatedDescription = await generateTaskDescriptionWithLLM(
-      product.id,
-      autopilotTask,
-      context,
-      300000 // 5 minutos
-    );
+    console.log(`[Watchdog] Product ID: ${product.id}, Task ID: ${autopilotTask.id}`);
+    
+    let generatedDescription: string;
+    try {
+      generatedDescription = await generateTaskDescriptionWithLLM(
+        product.id,
+        autopilotTask,
+        context,
+        300000 // 5 minutos
+      );
+      console.log(`[Watchdog] LLM generation completed, description length: ${generatedDescription.length}`);
+    } catch (llmError) {
+      console.error(`[Watchdog] LLM generation failed:`, llmError);
+      throw llmError;
+    }
 
     // 2. Obtener el agent_id real desde la BD de agents
     const agentId = await resolveAgentId(autopilotTask.agent_role, product.workspace_id || undefined);
@@ -627,10 +643,13 @@ async function createMissionControlTask(
       message: `Created task: ${autopilotTask.title}`,
     };
   } catch (error) {
-    console.error(`[Watchdog] Failed to create task:`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error(`[Watchdog] Failed to create task: ${errorMsg}`);
+    if (errorStack) console.error(`[Watchdog] Stack:`, errorStack);
     return {
       success: false,
-      message: 'Failed to create mission control task',
+      message: `Failed to create mission control task: ${errorMsg}`,
     };
   }
 }
@@ -648,8 +667,11 @@ interface CreateTaskParams {
 const PROMPT_KEY_WATCHDOG: PromptKey = 'watchdog-task-description';
 
 async function getWatchdogPromptConfig(productId: string) {
+  console.log(`[Watchdog] Loading prompt config for product: ${productId}`);
+  
   // 1. Try to get from DB
   const dbPrompt = getAutopilotPrompt(productId, PROMPT_KEY_WATCHDOG);
+  console.log(`[Watchdog] DB prompt found: ${dbPrompt ? 'YES' : 'NO'}`);
   if (dbPrompt && dbPrompt.prompt_text) {
     return {
       prompt_text: dbPrompt.prompt_text,
@@ -664,7 +686,9 @@ async function getWatchdogPromptConfig(productId: string) {
   // 2. Fallback: read from file
   try {
     const filepath = path.join(process.cwd(), 'prompts', '05-watchdog-task-description.md');
+    console.log(`[Watchdog] Trying to read prompt file: ${filepath}`);
     const content = await fs.readFile(filepath, 'utf-8');
+    console.log(`[Watchdog] Prompt file read successfully, length: ${content.length}`);
     
     // Parse prompt text
     const promptMatch = content.match(/## Prompt Template\s*\n\s*```(?:\w*\n|\n)?([\s\S]*?)```/);
@@ -784,11 +808,16 @@ async function generateTaskDescriptionWithLLM(
     .replace(/\{\{context\}\}/g, context || '');
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.timeout_ms);
+  const timeoutId = setTimeout(() => {
+    console.log(`[Watchdog LLM] Aborting request due to timeout (${config.timeout_ms}ms)`);
+    controller.abort();
+  }, config.timeout_ms);
   const startTime = Date.now();
 
   try {
     console.log(`[Watchdog LLM] Sending request to ${gatewayUrl}/v1/chat/completions...`);
+    console.log(`[Watchdog LLM] Request body length: ${finalPrompt.length} chars`);
+    console.log(`[Watchdog LLM] System prompt length: ${config.system_prompt?.length || 0} chars`);
     
     // Llamar al Gateway LLM
     const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
