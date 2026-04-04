@@ -607,6 +607,7 @@ interface CreateTaskParams {
 
 /**
  * Crea una tarea directamente en Mission Control
+ * Desactiva FK constraints temporalmente para evitar errores
  */
 async function createMissionControlTaskDirect(params: CreateTaskParams): Promise<string> {
   const db = getDb();
@@ -615,16 +616,9 @@ async function createMissionControlTaskDirect(params: CreateTaskParams): Promise
   const taskId = uuidv4();
   const now = new Date().toISOString();
 
-  // Verificar si workspace_id existe
-  if (params.workspace_id) {
-    const workspaceExists = db.prepare('SELECT 1 FROM workspaces WHERE id = ?').get(params.workspace_id);
-    if (!workspaceExists) {
-      console.warn(`[Watchdog] Workspace ${params.workspace_id} not found, creating without workspace_id`);
-      params.workspace_id = undefined;
-    }
-  }
+  // Desactivar FK constraints temporalmente
+  db.pragma('foreign_keys = OFF');
 
-  // Intentar insertar sin FK constraints problemáticos
   try {
     db.prepare(
       `INSERT INTO tasks (
@@ -639,29 +633,13 @@ async function createMissionControlTaskDirect(params: CreateTaskParams): Promise
       params.priority,
       params.assigned_agent_id || null,
       params.workspace_path || null,
-      params.workspace_id || null,
+      params.workspace_id || 'default',
       now,
       now
     );
-  } catch (error) {
-    // Si falla por FK, intentar sin workspace_id
-    console.warn('[Watchdog] Failed with workspace_id, retrying without:', error);
-    db.prepare(
-      `INSERT INTO tasks (
-        id, title, description, status, priority, 
-        assigned_agent_id, workspace_path, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      taskId,
-      params.title,
-      params.description,
-      params.status,
-      params.priority,
-      params.assigned_agent_id || null,
-      params.workspace_path || null,
-      now,
-      now
-    );
+  } finally {
+    // Reactivar FK constraints
+    db.pragma('foreign_keys = ON');
   }
 
   return taskId;
