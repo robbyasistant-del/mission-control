@@ -210,19 +210,27 @@ export default function AutopilotProductPage() {
     setAutoBuildingArch(true);
     setArchCountdown(300);
 
+    // Setup timeout handler to re-enable UI after 5 minutes
+    const timeoutId = setTimeout(() => {
+      setAutoBuildingArch(false);
+      alert('Auto-Build timed out after 5 minutes. You can now enter the Technical Architecture manually.');
+    }, 300000);
+
     try {
       const res = await fetch(`/api/autopilot/products/${product.id}/generate-technical-architecture`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ additional_prompt: additionalPromptArch }),
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to generate technical architecture');
       setEditedArchitecture(data.technicalArchitecture || '');
       await loadProduct();
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error(err);
-      alert(err instanceof Error ? err.message : 'Failed to auto-build technical architecture');
+      alert(err instanceof Error ? err.message : 'Failed to auto-build technical architecture. You can enter the content manually below.');
     } finally {
       setAutoBuildingArch(false);
     }

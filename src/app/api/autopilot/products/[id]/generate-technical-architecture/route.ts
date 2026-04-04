@@ -34,7 +34,9 @@ ${productProgram.slice(0, 1500)}${productProgram.length > 1500 ? '...' : ''}
 
 ${additionalPrompt ? `NOTAS ADICIONALES: ${additionalPrompt}` : ''}
 
-REGLA CRÍTICA: Debes generar las 5 secciones completas. No omitas ninguna.`;
+REGLA CRÍTICA: Debes generar las 5 secciones completas. No omitas ninguna.
+
+MANDATORY: NUNCA se escribe la respuesta en fichero. Se debe devolver el texto completo directamente en la respuesta de esta llamada API. NO escribir a disco.`;
 }
 
 export async function POST(
