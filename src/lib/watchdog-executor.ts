@@ -630,6 +630,16 @@ async function generateTaskDescriptionWithLLM(
   context: string,
   timeoutMs: number = 300000
 ): Promise<string> {
+  const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333';
+  const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || '';
+  const model = process.env.WATCHDOG_LLM_MODEL || 'gpt-4o';
+  
+  console.log(`[Watchdog LLM] Starting generation for task: ${task.title}`);
+  console.log(`[Watchdog LLM] Gateway URL: ${gatewayUrl}`);
+  console.log(`[Watchdog LLM] Model: ${model}`);
+  console.log(`[Watchdog LLM] Timeout: ${timeoutMs}ms`);
+  console.log(`[Watchdog LLM] Token present: ${gatewayToken ? 'YES' : 'NO'}`);
+  
   const prompt = `You are a technical project manager. Create a comprehensive task description with clear, atomic instructions.
 
 TASK TO IMPLEMENT:
@@ -678,17 +688,20 @@ Be CONCISE but COMPLETE. The agent must know EXACTLY what to build.`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const startTime = Date.now();
 
   try {
+    console.log(`[Watchdog LLM] Sending request to ${gatewayUrl}/v1/chat/completions...`);
+    
     // Llamar al Gateway LLM
-    const response = await fetch(`${process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333'}/v1/chat/completions`, {
+    const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENCLAW_GATEWAY_TOKEN || ''}`,
+        'Authorization': `Bearer ${gatewayToken}`,
       },
       body: JSON.stringify({
-        model: process.env.WATCHDOG_LLM_MODEL || 'gpt-4o',
+        model: model,
         messages: [
           { role: 'system', content: 'You are a technical project manager creating clear, actionable task descriptions for developers.' },
           { role: 'user', content: prompt }
@@ -699,10 +712,14 @@ Be CONCISE but COMPLETE. The agent must know EXACTLY what to build.`;
       signal: controller.signal,
     });
 
+    const duration = Date.now() - startTime;
     clearTimeout(timeoutId);
+    
+    console.log(`[Watchdog LLM] Response received in ${duration}ms, status: ${response.status}`);
 
     if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
+      const errorText = await response.text().catch(() => 'No error body');
+      throw new Error(`LLM API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -729,12 +746,17 @@ ${context}`;
     return finalDescription;
 
   } catch (error) {
+    const duration = Date.now() - startTime;
+    
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error('[Watchdog] LLM generation timed out after 5 minutes');
+      console.error(`[Watchdog LLM] Generation timed out after ${duration}ms (5 minute limit)`);
       throw new Error('LLM generation timeout');
     }
     
-    console.error('[Watchdog] LLM generation failed:', error);
+    console.error(`[Watchdog LLM] Generation failed after ${duration}ms:`, error);
+    console.error(`[Watchdog LLM] Error type: ${error instanceof Error ? error.constructor.name : typeof error}`);
+    console.error(`[Watchdog LLM] Error message: ${error instanceof Error ? error.message : String(error)}`);
+    
     // Fallback: usar descripcion original
     return `# Task: ${task.title}
 **Agent:** ${task.agent_role}
@@ -745,7 +767,7 @@ ${task.description_text || 'No description provided'}
 ## Context
 ${context}
 
-[Note: LLM generation failed, using fallback description]`;
+[Note: LLM generation failed after ${duration}ms, using fallback description]`;
   }
 }
 
