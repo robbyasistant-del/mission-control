@@ -43,7 +43,16 @@ export async function GET(request: NextRequest) {
             await runHealthCheckCycle();
           }
         } catch (error) {
-          console.error('[SSE] Health check cycle error:', error);
+          // Log detailed error for debugging
+          if (error instanceof Error) {
+            console.error('[SSE] Health check cycle error:', {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            });
+          } else {
+            console.error('[SSE] Health check cycle error:', error);
+          }
         }
       }, 120000);
 
