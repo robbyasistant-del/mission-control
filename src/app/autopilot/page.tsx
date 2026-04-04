@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Rocket, Plus, ArrowRight, FlaskConical, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowRight, Trash2, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { MainNav } from '@/components/MainNav';
 
 interface AutopilotProduct {
   id: string;
@@ -87,7 +88,6 @@ function ProductCard({ product, onDelete }: { product: AutopilotProduct; onDelet
         </div>
       </Link>
 
-      {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-3 sm:p-4" onClick={() => setShowDeleteConfirm(false)}>
           <div className="bg-mc-bg-secondary border border-mc-border rounded-t-xl sm:rounded-xl w-full max-w-md p-5 sm:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-6" onClick={e => e.stopPropagation()}>
@@ -153,49 +153,40 @@ export default function AutopilotHomePage() {
     setProducts(products.filter(p => p.id !== id));
   };
 
-  return (
-    <div className="min-h-screen bg-mc-bg">
-      {/* Header */}
-      <header className="border-b border-mc-border bg-mc-bg-secondary">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Rocket className="w-6 h-6 text-mc-accent-cyan" />
-              <div>
-                <h1 className="text-xl font-bold text-mc-text">Autopilot</h1>
-                <p className="text-xs text-mc-text-secondary">AI-powered product automation</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/autopilot/new"
-                className="min-h-11 flex items-center gap-2 px-4 bg-mc-accent text-mc-bg rounded-lg font-medium hover:bg-mc-accent/90"
-              >
-                <Plus className="w-4 h-4" />
-                New Product
-              </Link>
-              <Link
-                href="/laboratory"
-                className="min-h-11 px-4 rounded-lg border border-mc-border bg-mc-bg text-mc-text-secondary hover:text-mc-text hover:bg-mc-bg-tertiary flex items-center gap-2 text-sm"
-              >
-                <FlaskConical className="w-4 h-4" />
-                Laboratory
-              </Link>
-            </div>
+  if (loading) {
+    return (
+      <>
+        <MainNav />
+        <div className="min-h-screen bg-mc-bg flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-4xl mb-4 animate-pulse">🚀</div>
+            <p className="text-mc-text-secondary">Loading products...</p>
           </div>
         </div>
-      </header>
+      </>
+    );
+  }
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="text-center">
-              <div className="text-4xl mb-4 animate-pulse">🚀</div>
-              <p className="text-mc-text-secondary">Loading products...</p>
-            </div>
+  return (
+    <>
+      <MainNav />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Header con título y botón de crear */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Autopilot Products</h2>
+            <p className="text-mc-text-secondary">AI-powered product automation</p>
           </div>
-        ) : products.length === 0 ? (
+          <Link
+            href="/autopilot/new"
+            className="flex items-center gap-2 px-4 py-2 bg-mc-accent text-mc-bg rounded-lg font-medium hover:bg-mc-accent/90"
+          >
+            <Plus className="w-4 h-4" />
+            New Product
+          </Link>
+        </div>
+
+        {products.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-6">🚀</div>
             <h2 className="text-xl font-semibold mb-2">No products yet</h2>
@@ -211,33 +202,27 @@ export default function AutopilotHomePage() {
             </Link>
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Products ({products.length})</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((product) => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  onDelete={handleDelete}
-                />
-              ))}
-              
-              {/* Add Product Card */}
-              <Link href="/autopilot/new">
-                <div className="border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex flex-col items-center justify-center gap-3 min-h-[160px]"
-                >
-                  <div className="w-12 h-12 rounded-full bg-mc-bg-tertiary flex items-center justify-center">
-                    <Plus className="w-6 h-6 text-mc-text-secondary" />
-                  </div>
-                  <span className="text-mc-text-secondary font-medium">New Product</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map((product) => (
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                onDelete={handleDelete}
+              />
+            ))}
+            
+            {/* Add Product Card */}
+            <Link href="/autopilot/new">
+              <div className="border-2 border-dashed border-mc-border rounded-xl p-6 hover:border-mc-accent/50 transition-colors flex flex-col items-center justify-center gap-3 min-h-[160px]">
+                <div className="w-12 h-12 rounded-full bg-mc-bg-tertiary flex items-center justify-center">
+                  <Plus className="w-6 h-6 text-mc-text-secondary" />
                 </div>
-              </Link>
-            </div>
-          </>
+                <span className="text-mc-text-secondary font-medium">New Product</span>
+              </div>
+            </Link>
+          </div>
         )}
       </main>
-    </div>
+    </>
   );
 }

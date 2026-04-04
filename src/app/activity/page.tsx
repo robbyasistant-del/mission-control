@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Activity, ArrowRight } from 'lucide-react';
+import { Activity, ArrowRight } from 'lucide-react';
+import { MainNav } from '@/components/MainNav';
 import type { Workspace } from '@/lib/types';
 
 export default function ActivityPickerPage() {
@@ -18,7 +19,6 @@ export default function ActivityPickerPage() {
           const ws: Workspace[] = await res.json();
           setWorkspaces(ws);
 
-          // Fetch task counts per workspace
           const counts: Record<string, { active: number; total: number }> = {};
           await Promise.all(ws.map(async (w) => {
             try {
@@ -46,32 +46,27 @@ export default function ActivityPickerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-mc-bg flex items-center justify-center">
-        <div className="text-center">
-          <Activity className="w-8 h-8 text-mc-accent mx-auto mb-3 animate-pulse" />
-          <p className="text-mc-text-secondary">Loading workspaces...</p>
+      <>
+        <MainNav />
+        <div className="min-h-screen bg-mc-bg flex items-center justify-center">
+          <div className="text-center">
+            <Activity className="w-8 h-8 text-mc-accent mx-auto mb-3 animate-pulse" />
+            <p className="text-mc-text-secondary">Loading workspaces...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-mc-bg">
-      <header className="border-b border-mc-border bg-mc-bg-secondary">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="text-mc-text-secondary hover:text-mc-text transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <Activity className="w-6 h-6 text-mc-accent" />
-              <h1 className="text-xl font-bold text-mc-text">Activity Dashboards</h1>
-            </div>
-          </div>
+    <>
+      <MainNav />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-1">Activity Dashboards</h2>
+          <p className="text-mc-text-secondary">Select a workspace to view agent activity</p>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {workspaces.length === 0 ? (
           <div className="text-center py-20">
             <Activity className="w-12 h-12 text-mc-text-secondary mx-auto mb-4" />
@@ -114,6 +109,6 @@ export default function ActivityPickerPage() {
           </div>
         )}
       </main>
-    </div>
+    </>
   );
 }

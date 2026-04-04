@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save, CheckCircle } from 'lucide-react';
+import { ArrowRight, ExternalLink, Github, Globe, Loader, FileText, Settings, Activity, Workflow, ChevronRight, Save, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
+import { MainNav } from '@/components/MainNav';
 
 type WorkflowState =
   | 'initial'
@@ -578,22 +579,21 @@ export default function AutopilotProductPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-mc-bg">
-      {/* Header */}
-      <header className="border-b border-mc-border bg-mc-bg-secondary">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Link href="/autopilot" className="text-mc-text-secondary hover:text-mc-text">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <span className="text-3xl">{product.icon || '🚀'}</span>
-            <div>
-              <h1 className="text-xl font-bold text-mc-text">{product.name}</h1>
-              <p className="text-xs text-mc-text-secondary">Autopilot Product</p>
+    <>
+      <MainNav />
+      <div className="min-h-screen bg-mc-bg">
+        {/* Product Header */}
+        <header className="border-b border-mc-border bg-mc-bg-secondary">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{product.icon || '🚀'}</span>
+              <div>
+                <h1 className="text-lg font-bold text-mc-text">{product.name}</h1>
+                <p className="text-xs text-mc-text-secondary">Autopilot Product</p>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
       {/* Horizontal Tabs */}
       <div className="border-b border-mc-border bg-mc-bg-secondary/50 sticky top-0 z-10">
@@ -1458,8 +1458,8 @@ export default function AutopilotProductPage() {
           </div>
         )}
 
-
       </main>
     </div>
+  </>
   );
 }
