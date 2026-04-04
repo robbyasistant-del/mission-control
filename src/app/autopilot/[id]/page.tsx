@@ -29,6 +29,7 @@ interface AutopilotProduct {
   technical_architecture?: string;
   additional_prompt_arch?: string;
   implementation_roadmap?: string;
+  additional_prompt_roadmap?: string;
   build_mode?: string;
   default_branch?: string;
   workflow_state?: WorkflowState;
@@ -100,10 +101,13 @@ export default function AutopilotProductPage() {
   const [editedRoadmap, setEditedRoadmap] = useState('');
   const [additionalPrompt, setAdditionalPrompt] = useState('');
   const [additionalPromptArch, setAdditionalPromptArch] = useState('');
+  const [additionalPromptRoadmap, setAdditionalPromptRoadmap] = useState('');
   const [autoBuildingExecutive, setAutoBuildingExecutive] = useState(false);
   const [autoBuildingArch, setAutoBuildingArch] = useState(false);
+  const [autoBuildingRoadmap, setAutoBuildingRoadmap] = useState(false);
   const [executiveCountdown, setExecutiveCountdown] = useState(300);
   const [archCountdown, setArchCountdown] = useState(300);
+  const [roadmapCountdown, setRoadmapCountdown] = useState(300);
   const [saving, setSaving] = useState(false);
   const [regressionFromStep, setRegressionFromStep] = useState<number | null>(null);
 
@@ -118,6 +122,7 @@ export default function AutopilotProductPage() {
     setEditedRoadmap(product?.implementation_roadmap || '');
     setAdditionalPrompt(product?.additional_prompt || '');
     setAdditionalPromptArch(product?.additional_prompt_arch || '');
+    setAdditionalPromptRoadmap(product?.additional_prompt_roadmap || '');
   }, [product]);
 
   const loadProduct = async () => {
@@ -157,6 +162,7 @@ export default function AutopilotProductPage() {
     // persist prompt separately when saving executive step
     if (step === 'executive-summary') updates.additional_prompt = additionalPrompt;
     if (step === 'technical-architecture') updates.additional_prompt_arch = additionalPromptArch;
+    if (step === 'implementation-roadmap') updates.additional_prompt_roadmap = additionalPromptRoadmap;
 
     // Advance only when saving the next progression step; editing previous steps won't rollback state
     if (stepIndex > currentStateIndex) {
@@ -286,6 +292,51 @@ export default function AutopilotProductPage() {
     return () => clearInterval(t);
   }, [autoBuildingExecutive]);
 
+  const handleAutoBuildRoadmap = async () => {
+    if (!product) return;
+    setAutoBuildingRoadmap(true);
+    setRoadmapCountdown(300);
+
+    const controller = new AbortController();
+    let timedOut = false;
+
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      setAutoBuildingRoadmap(false);
+      alert('Auto-Build timed out after 5 minutes. You can now enter the Implementation Roadmap manually.');
+    }, 300000);
+
+    try {
+      const res = await fetch(`/api/autopilot/products/${product.id}/generate-implementation-roadmap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ additional_prompt: additionalPromptRoadmap }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (timedOut) {
+        console.log('Ignoring late response from implementation roadmap generation (timeout exceeded)');
+        return;
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to generate implementation roadmap');
+      setEditedRoadmap(data.implementationRoadmap || '');
+      await loadProduct();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === 'AbortError' && timedOut) {
+        return;
+      }
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to auto-build implementation roadmap. You can enter the content manually below.');
+    } finally {
+      setAutoBuildingRoadmap(false);
+    }
+  };
+
   useEffect(() => {
     if (!autoBuildingArch) return;
     const t = setInterval(() => {
@@ -293,6 +344,14 @@ export default function AutopilotProductPage() {
     }, 1000);
     return () => clearInterval(t);
   }, [autoBuildingArch]);
+
+  useEffect(() => {
+    if (!autoBuildingRoadmap) return;
+    const t = setInterval(() => {
+      setRoadmapCountdown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [autoBuildingRoadmap]);
 
   if (loading) {
     return (
@@ -669,22 +728,56 @@ export default function AutopilotProductPage() {
               )}
 
               {activeWorkflowStep === 'implementation-roadmap' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-mc-text">Implementation Roadmap</h2>
-                    <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 4 of 5</span>
-                  </div>
-                  <p className="text-sm text-mc-text-secondary">Timeline, milestones, and resource allocation plan.</p>
-                  <textarea
-                    value={editedRoadmap}
-                    onChange={(e) => setEditedRoadmap(e.target.value)}
-                    placeholder="# Implementation Roadmap"
-                    className="w-full h-[50vh] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none"
-                  />
-                  <div className="flex justify-end">
-                    <button onClick={() => handleSaveStep('implementation-roadmap')} disabled={saving} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2">
-                      {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
+                <div className="flex flex-col h-[calc(100vh-280px)] gap-4">
+                  <div className="flex-[25] flex items-stretch gap-4 bg-mc-bg rounded-lg border border-mc-border p-4 min-h-[180px]">
+                    <div className="flex-1 flex flex-col gap-2">
+                      <label className="text-xs font-medium text-mc-text-secondary uppercase tracking-wide">Additional Prompt</label>
+                      <textarea
+                        value={additionalPromptRoadmap}
+                        onChange={(e) => setAdditionalPromptRoadmap(e.target.value)}
+                        disabled={autoBuildingRoadmap}
+                        placeholder="Add any specific roadmap constraints, sequencing rules, delivery expectations or development notes..."
+                        className="w-full h-full min-h-[120px] bg-mc-bg-tertiary border border-mc-border rounded-lg p-3 text-sm text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60"
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-center gap-2 text-mc-text-secondary">
+                      <span className="text-xs bg-mc-bg-tertiary px-2 py-1 rounded border border-mc-border">+ Product Program</span>
+                      <span className="text-xs bg-mc-bg-tertiary px-2 py-1 rounded border border-mc-border">+ Executive Summary</span>
+                      <span className="text-xs bg-mc-bg-tertiary px-2 py-1 rounded border border-mc-border">+ Technical Architecture</span>
+                      <ArrowRight className="w-4 h-4 self-center" />
+                    </div>
+
+                    <button
+                      onClick={handleAutoBuildRoadmap}
+                      disabled={autoBuildingRoadmap || !product?.product_program || !product?.executive_summary || !product?.technical_architecture}
+                      className="px-4 py-3 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 whitespace-nowrap min-w-[120px]"
+                    >
+                      {autoBuildingRoadmap ? `Building… ${roadmapCountdown}s` : 'Auto-Build'}
                     </button>
+                  </div>
+
+                  <div className="flex-[75] flex flex-col gap-3 min-h-0">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-mc-text">Implementation Roadmap</h2>
+                        <p className="text-sm text-mc-text-secondary">Detailed sprint-by-sprint delivery plan with tasks, deliverables and quality criteria. ({editedRoadmap.length} chars)</p>
+                      </div>
+                      <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded">Step 4 of 5</span>
+                    </div>
+                    <textarea
+                      value={editedRoadmap}
+                      onChange={(e) => setEditedRoadmap(e.target.value)}
+                      placeholder="# Implementation Roadmap"
+                      disabled={autoBuildingRoadmap}
+                      maxLength={500000}
+                      className="flex-1 w-full min-h-[400px] bg-mc-bg border border-mc-border rounded-lg p-4 text-sm font-mono text-mc-text focus:outline-none focus:border-mc-accent resize-none disabled:opacity-60 overflow-auto"
+                    />
+                    <div className="flex justify-end">
+                      <button onClick={() => handleSaveStep('implementation-roadmap')} disabled={saving || autoBuildingRoadmap} className="px-4 py-2 bg-mc-accent text-mc-bg rounded-lg text-sm font-medium hover:bg-mc-accent/90 disabled:opacity-50 flex items-center gap-2">
+                        {saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> Save</>}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

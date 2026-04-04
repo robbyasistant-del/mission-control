@@ -10,6 +10,7 @@ import { run } from '@/lib/db';
 function ensureAutopilotColumns() {
   try { run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt TEXT`); } catch {}
   try { run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt_arch TEXT`); } catch {}
+  try { run(`ALTER TABLE autopilot_products ADD COLUMN additional_prompt_roadmap TEXT`); } catch {}
   try { run(`ALTER TABLE autopilot_products ADD COLUMN executive_summary TEXT`); } catch {}
   try { run(`ALTER TABLE autopilot_products ADD COLUMN technical_architecture TEXT`); } catch {}
   try { run(`ALTER TABLE autopilot_products ADD COLUMN implementation_roadmap TEXT`); } catch {}

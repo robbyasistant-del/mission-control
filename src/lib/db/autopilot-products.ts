@@ -25,6 +25,7 @@ export interface AutopilotProduct {
   technical_architecture: string | null;
   additional_prompt_arch: string | null;
   implementation_roadmap: string | null;
+  additional_prompt_roadmap: string | null;
   build_mode: string | null;
   default_branch: string | null;
   workspace_id: string | null;
@@ -67,6 +68,7 @@ export function createAutopilotProduct(input: CreateAutopilotProductInput): Auto
     technical_architecture: null,
     additional_prompt_arch: null,
     implementation_roadmap: null,
+    additional_prompt_roadmap: null,
     build_mode: input.build_mode ?? 'plan_first',
     default_branch: input.default_branch ?? 'main',
     workspace_id: input.workspace_id ?? null,
