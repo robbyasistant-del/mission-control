@@ -866,40 +866,74 @@ export default function AutopilotProductPage() {
                     </div>
 
                     {/* Sprints list */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       {sprints.length === 0 ? (
                         <div className="bg-mc-bg rounded-lg border border-mc-border border-dashed p-8 text-center">
                           <p className="text-mc-text-secondary text-sm">No sprints generated yet. Click &quot;Generate Sprints & Tasks&quot; to parse the Implementation Roadmap.</p>
                         </div>
                       ) : (
                         sprints.map((sprint) => (
-                          <div key={sprint.id} className="bg-mc-bg rounded-lg border border-mc-border p-4">
-                            <h3 className="font-semibold text-mc-text mb-3">
-                              ### Sprint #{sprint.sprint_number}: {sprint.phase_name}
-                            </h3>
+                          <div key={sprint.id} className="bg-mc-bg-secondary rounded-lg border border-mc-border overflow-hidden">
+                            {/* Sprint Header */}
+                            <div className="bg-mc-bg-tertiary px-4 py-3 border-b border-mc-border">
+                              <div className="flex items-center justify-between">
+                                <h3 className="font-semibold text-mc-text">
+                                  <span className="text-mc-accent">Sprint #{sprint.sprint_number}</span>
+                                  <span className="mx-2 text-mc-text-secondary">|</span>
+                                  <span>{sprint.phase_name}</span>
+                                </h3>
+                                <span className="text-xs text-mc-text-secondary bg-mc-bg px-2 py-1 rounded border border-mc-border">
+                                  {sprint.tasks?.length || 0} tasks
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Tasks Table */}
                             {sprint.tasks && sprint.tasks.length > 0 ? (
-                              <div className="space-y-2">
-                                <p className="text-sm text-mc-text-secondary font-medium">**Tasks:**</p>
-                                {sprint.tasks.map((task: any) => (
-                                  <div key={task.id} className="flex items-center gap-3 p-2 bg-mc-bg-secondary rounded text-sm">
-                                    <span className="text-mc-accent font-mono">[{task.agent_role}]</span>
-                                    <span className="text-mc-text-secondary font-mono">[{task.start_date || 'TBD'}]</span>
-                                    <span className="text-mc-text-secondary font-mono">[{task.end_date || 'TBD'}]</span>
-                                    <span className={`font-mono ${
-                                      task.status === 'done' ? 'text-green-400' :
-                                      task.status === 'in_progress' ? 'text-blue-400' :
-                                      task.status === 'blocked' ? 'text-red-400' :
-                                      task.status === 'testing' ? 'text-purple-400' :
-                                      'text-yellow-400'
-                                    }`}>
-                                      [{task.status}]
-                                    </span>
-                                    <span className="flex-1 text-mc-text">{task.title}</span>
-                                  </div>
-                                ))}
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="bg-mc-bg border-b border-mc-border">
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">#</th>
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">Agent</th>
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">Task</th>
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">Start</th>
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">End</th>
+                                      <th className="text-left px-4 py-2 text-mc-text-secondary font-medium">Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sprint.tasks.map((task: any, idx: number) => (
+                                      <tr key={task.id} className="border-b border-mc-border/50 hover:bg-mc-bg/50">
+                                        <td className="px-4 py-2 text-mc-text-secondary">{idx + 1}</td>
+                                        <td className="px-4 py-2">
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-mc-accent/10 text-mc-accent">
+                                            {task.agent_role}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-mc-text">{task.title}</td>
+                                        <td className="px-4 py-2 text-mc-text-secondary font-mono text-xs">{task.start_date || '—'}</td>
+                                        <td className="px-4 py-2 text-mc-text-secondary font-mono text-xs">{task.end_date || '—'}</td>
+                                        <td className="px-4 py-2">
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                            task.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                                            task.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
+                                            task.status === 'blocked' ? 'bg-red-500/20 text-red-400' :
+                                            task.status === 'testing' ? 'bg-purple-500/20 text-purple-400' :
+                                            'bg-yellow-500/20 text-yellow-400'
+                                          }`}>
+                                            {task.status}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             ) : (
-                              <p className="text-sm text-mc-text-secondary">No tasks for this sprint.</p>
+                              <div className="px-4 py-4 text-sm text-mc-text-secondary">
+                                No tasks for this sprint.
+                              </div>
                             )}
                           </div>
                         ))
