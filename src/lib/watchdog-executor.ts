@@ -197,7 +197,8 @@ async function checkExistingTasks(context: ExecutionContext): Promise<TaskCheckR
   }
 
   // 2.3: Verificar si hay tareas activas (no done)
-  const activeStatuses = ['assigned', 'in_progress', 'convoy_active', 'testing', 'verification'];
+  // Estados que indican trabajo en curso: planning, assigned, in_progress, convoy_active, testing, review, verification
+  const activeStatuses = ['pending_dispatch', 'planning', 'inbox', 'assigned', 'in_progress', 'convoy_active', 'testing', 'review', 'verification'];
   const activeTasks = workspaceTasks.filter((t) => activeStatuses.includes(t.status));
 
   if (activeTasks.length > 0) {
