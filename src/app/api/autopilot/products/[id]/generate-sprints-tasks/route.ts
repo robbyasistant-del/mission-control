@@ -163,10 +163,68 @@ function parseRoadmap(roadmapContent: string): ParsedSprint[] {
   return sprints;
 }
 
-function ensureTables(db: any) {
-  try {
-    db.pragma('foreign_keys = OFF');
+function recreateTablesWithoutFK(db: any) {
+  // Check if tables exist and have foreign key constraints
+  const tablesExist = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('autopilot_sprints', 'autopilot_tasks')").all();
+  
+  if (tablesExist.length > 0) {
+    // Backup existing data if any
+    const existingSprints = db.prepare("SELECT * FROM autopilot_sprints").all().catch(() => []);
+    const existingTasks = db.prepare("SELECT * FROM autopilot_tasks").all().catch(() => []);
     
+    // Drop tables with foreign keys disabled
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.exec('DROP TABLE IF EXISTS autopilot_tasks');
+      db.exec('DROP TABLE IF EXISTS autopilot_sprints');
+    } catch (e) {
+      console.log('Tables may not exist yet');
+    }
+    
+    // Create tables WITHOUT foreign key constraints
+    db.exec(`
+      CREATE TABLE autopilot_sprints (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        sprint_number INTEGER NOT NULL,
+        phase_name TEXT NOT NULL,
+        phase_number INTEGER NOT NULL,
+        functionality_analysis TEXT,
+        features_description TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(product_id, sprint_number)
+      )
+    `);
+    
+    db.exec(`
+      CREATE TABLE autopilot_tasks (
+        id TEXT PRIMARY KEY,
+        sprint_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        task_number INTEGER NOT NULL,
+        agent_role TEXT NOT NULL,
+        agent_name TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'blocked', 'testing', 'done')),
+        title TEXT NOT NULL,
+        description_text TEXT,
+        deliverables TEXT,
+        quality_criteria TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(sprint_id, task_number)
+      )
+    `);
+    
+    db.exec('CREATE INDEX idx_autopilot_sprints_product ON autopilot_sprints(product_id, sprint_number)');
+    db.exec('CREATE INDEX idx_autopilot_tasks_sprint ON autopilot_tasks(sprint_id, task_number)');
+    db.exec('CREATE INDEX idx_autopilot_tasks_product ON autopilot_tasks(product_id, status)');
+    
+    db.pragma('foreign_keys = ON');
+  } else {
+    // Tables don't exist, create them normally without FK
     db.exec(`
       CREATE TABLE IF NOT EXISTS autopilot_sprints (
         id TEXT PRIMARY KEY,
@@ -203,9 +261,9 @@ function ensureTables(db: any) {
       )
     `);
     
-    db.pragma('foreign_keys = ON');
-  } catch (e) {
-    console.error('Failed to ensure tables:', e);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_autopilot_sprints_product ON autopilot_sprints(product_id, sprint_number)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_autopilot_tasks_sprint ON autopilot_tasks(sprint_id, task_number)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_autopilot_tasks_product ON autopilot_tasks(product_id, status)');
   }
 }
 
@@ -215,7 +273,9 @@ export async function POST(
 ) {
   try {
     const db = getDb();
-    ensureTables(db);
+    
+    // Recreate tables without foreign key constraints
+    recreateTablesWithoutFK(db);
     
     const product = getAutopilotProduct(params.id);
 
@@ -231,10 +291,8 @@ export async function POST(
     }
 
     // Delete existing data
-    db.pragma('foreign_keys = OFF');
     db.prepare('DELETE FROM autopilot_tasks WHERE product_id = ?').run(params.id);
     db.prepare('DELETE FROM autopilot_sprints WHERE product_id = ?').run(params.id);
-    db.pragma('foreign_keys = ON');
 
     // Parse roadmap
     const parsedSprints = parseRoadmap(product.implementation_roadmap);
