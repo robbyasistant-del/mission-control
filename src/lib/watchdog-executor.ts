@@ -630,7 +630,9 @@ async function generateTaskDescriptionWithLLM(
   context: string,
   timeoutMs: number = 300000
 ): Promise<string> {
-  const gatewayUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333';
+  const gatewayUrl = (process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3333')
+    .replace('ws://', 'http://')
+    .replace('wss://', 'https://');
   const gatewayToken = process.env.OPENCLAW_GATEWAY_TOKEN || '';
   const model = process.env.WATCHDOG_LLM_MODEL || 'gpt-4o';
   
