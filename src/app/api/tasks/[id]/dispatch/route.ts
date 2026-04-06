@@ -137,9 +137,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const openclawSessionId = `mission-control-${agent.name.toLowerCase().replace(/\s+/g, '-')}`;
       
       run(
-        `INSERT INTO openclaw_sessions (id, agent_id, openclaw_session_id, channel, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [sessionId, agent.id, openclawSessionId, 'mission-control', 'active', now, now]
+        `INSERT INTO openclaw_sessions (id, agent_id, openclaw_session_id, channel, status, created_at, updated_at, task_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sessionId, agent.id, openclawSessionId, 'mission-control', 'active', now, now, id]
       );
 
       session = queryOne<OpenClawSession>(
@@ -147,12 +147,104 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         [sessionId]
       );
 
+      // CRITICAL: Spawn the actual OpenClaw session via Gateway
+      console.log(`[Dispatch] Spawning OpenClaw session for agent ${agent.name}...`);
+      try {
+        // Prepare task context for the agent
+        const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
+        
+        // Spawn subagent session
+        await client.call('sessions.spawn', {
+          task: spawnTask,
+          agentId: agent.id,
+          mode: 'session',
+          label: openclawSessionId,
+          timeoutSeconds: 0  // Persistent session
+        });
+        
+        console.log(`[Dispatch] OpenClaw session spawned successfully: ${openclawSessionId}`);
+        
+        // Update session status
+        run(
+          'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
+          ['active', now, sessionId]
+        );
+      } catch (spawnErr) {
+        console.error(`[Dispatch] Failed to spawn OpenClaw session:`, spawnErr);
+        // Mark session as failed but continue - will retry on next dispatch
+        run(
+          'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
+          ['failed', now, sessionId]
+        );
+        return NextResponse.json(
+          { error: `Failed to spawn agent session: ${(spawnErr as Error).message}` },
+          { status: 503 }
+        );
+      }
+
       // Log session creation
       run(
-        `INSERT INTO events (id, type, agent_id, message, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-        [uuidv4(), 'agent_status_changed', agent.id, `${agent.name} session created`, now]
+        `INSERT INTO events (id, type, agent_id, task_id, message, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [uuidv4(), 'agent_status_changed', agent.id, id, `${agent.name} OpenClaw session created`, now]
       );
+    } else {
+      // Update task_id for existing session to link it to current task
+      if (!session.task_id || session.task_id !== id) {
+        console.log(`[Dispatch] Linking existing session ${session.id} to task ${id}`);
+        run(
+          'UPDATE openclaw_sessions SET task_id = ?, updated_at = ? WHERE id = ?',
+          [id, now, session.id]
+        );
+        // Reload session with updated task_id
+        session = queryOne<OpenClawSession>(
+          'SELECT * FROM openclaw_sessions WHERE id = ?',
+          [session.id]
+        );
+      }
+
+      // Validate existing session is still active in OpenClaw
+
+      if (!session) {
+        return NextResponse.json(
+          { error: 'Failed to get or create agent session' },
+          { status: 500 }
+        );
+      }
+
+      try {
+        const prefix = agent.session_key_prefix || 'agent:main:';
+        const sessionKey = `${prefix}${session.openclaw_session_id}`;
+        
+        // Check if session exists in OpenClaw
+        const existingSessions = await client.call('sessions.list', {}) as { sessions?: Array<{ key: string }> };
+        const sessionExists = existingSessions?.sessions?.some((s: { key: string }) => s.key === sessionKey);
+        
+        if (!sessionExists) {
+          console.warn(`[Dispatch] Session ${sessionKey} not found in OpenClaw, respawning...`);
+          
+          // Respawn the session
+          const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
+          
+          await client.call('sessions.spawn', {
+            task: spawnTask,
+            agentId: agent.id,
+            mode: 'session',
+            label: session.openclaw_session_id,
+            timeoutSeconds: 0
+          });
+          
+          console.log(`[Dispatch] Session respawned successfully`);
+          
+          run(
+            'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
+            ['active', now, session.id]
+          );
+        }
+      } catch (validateErr) {
+        console.warn(`[Dispatch] Session validation failed:`, validateErr);
+        // Continue anyway - chat.send will fail with clear error if session really doesn't exist
+      }
     }
 
     if (!session) {
@@ -490,17 +582,38 @@ If you need help or clarification, ask the orchestrator.`;
     const { formatted: pendingNotes } = getPendingNotesForDispatch(id);
     const finalMessage = pendingNotes ? taskMessage + pendingNotes : taskMessage;
 
+    // Validate session exists before sending message
+    const prefix = agent.session_key_prefix || 'agent:main:';
+    const sessionKey = `${prefix}${session.openclaw_session_id}`;
+    
+    try {
+      // Verify session exists in OpenClaw
+      const sessionList = await client.call('sessions.list', {}) as { sessions?: Array<{ key: string }> };
+      const sessionExists = sessionList?.sessions?.some((s: { key: string }) => s.key === sessionKey);
+      
+      if (!sessionExists) {
+        console.error(`[Dispatch] Session ${sessionKey} does not exist in OpenClaw. Cannot dispatch.`);
+        return NextResponse.json(
+          { error: `Agent session not found in OpenClaw. Please retry dispatch.` },
+          { status: 503 }
+        );
+      }
+      
+      console.log(`[Dispatch] Session validated: ${sessionKey}`);
+    } catch (validateErr) {
+      console.warn(`[Dispatch] Could not validate session:`, validateErr);
+      // Continue anyway - let chat.send fail with clear error if needed
+    }
+
     // Send message to agent's session using chat.send
     try {
-      // Use sessionKey for routing to the agent's session
-      // Format: {prefix}{openclaw_session_id} where prefix defaults to 'agent:main:'
-      const prefix = agent.session_key_prefix || 'agent:main:';
-      const sessionKey = `${prefix}${session.openclaw_session_id}`;
       await client.call('chat.send', {
         sessionKey,
         message: finalMessage,
         idempotencyKey: `dispatch-${task.id}-${Date.now()}`
       });
+      
+      console.log(`[Dispatch] Message sent successfully to ${sessionKey}`);
 
       // Only move to in_progress for builder dispatch (task is in 'assigned' status)
       // For tester/reviewer/verifier, the task status is already correct
