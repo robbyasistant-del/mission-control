@@ -249,18 +249,9 @@ export async function nudgeAgent(agentId: string): Promise<{
   actions.push(`Killed ${killedLocal.changes} local session(s)`);
 
   // 1b. Kill Gateway session (fire-and-forget, best effort)
-  try {
-    const gatewayClient = getOpenClawClient();
-    if (gatewayClient.isConnected()) {
-      await gatewayClient.call('session.close', {
-        agentId: agentId,
-        reason: 'nudge_recovery'
-      }).catch(() => { /* ignore */ });
-      actions.push('Requested Gateway session cleanup');
-    }
-  } catch {
-    actions.push('Gateway cleanup skipped (not connected)');
-  }
+  // NOTE: session.close method does not exist in OpenClaw Gateway
+  // Gateway sessions are managed automatically, no manual cleanup needed
+  actions.push('Gateway session cleanup skipped (auto-managed)');
 
   // Wait for session termination to propagate
   await new Promise(resolve => setTimeout(resolve, 2000));
