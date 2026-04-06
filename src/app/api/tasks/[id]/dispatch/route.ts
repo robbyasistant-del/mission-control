@@ -203,48 +203,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      // Validate existing session is still active in OpenClaw
-
-      if (!session) {
-        return NextResponse.json(
-          { error: 'Failed to get or create agent session' },
-          { status: 500 }
-        );
-      }
-
-      try {
-        const prefix = agent.session_key_prefix || 'agent:main:';
-        const sessionKey = `${prefix}${session!.openclaw_session_id}`;
-        
-        // Check if session exists in OpenClaw
-        const existingSessions = await client.call('sessions.list', {}) as { sessions?: Array<{ key: string }> };
-        const sessionExists = existingSessions?.sessions?.some((s: { key: string }) => s.key === sessionKey);
-        
-        if (!sessionExists) {
-          console.warn(`[Dispatch] Session ${sessionKey} not found in OpenClaw, respawning...`);
-          
-          // Respawn the session
-          const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
-          
-          await client.call('sessions.spawn', {
-            task: spawnTask,
-            agentId: agent.id,
-            mode: 'session',
-            label: session!.openclaw_session_id,
-            timeoutSeconds: 0
-          });
-          
-          console.log(`[Dispatch] Session respawned successfully`);
-          
-          run(
-            'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
-            ['active', now, session.id]
-          );
-        }
-      } catch (validateErr) {
-        console.warn(`[Dispatch] Session validation failed:`, validateErr);
-        // Continue anyway - chat.send will fail with clear error if session really doesn't exist
-      }
+      // Note: chat.send will automatically create the session if it doesn't exist
+      // No need to manually spawn/validate the session
     }
 
     if (!session) {
@@ -582,37 +542,12 @@ If you need help or clarification, ask the orchestrator.`;
     const { formatted: pendingNotes } = getPendingNotesForDispatch(id);
     const finalMessage = pendingNotes ? taskMessage + pendingNotes : taskMessage;
 
-    // Ensure session exists in OpenClaw (create if missing)
+    // Prepare session key for sending message
+    // Note: chat.send will automatically create the session if it doesn't exist
     const prefix = agent.session_key_prefix || 'agent:main:';
     const sessionKey = `${prefix}${session!.openclaw_session_id}`;
     
-    try {
-      // Verify session exists in OpenClaw
-      const sessionList = await client.call('sessions.list', {}) as { sessions?: Array<{ key: string }> };
-      const sessionExists = sessionList?.sessions?.some((s: { key: string }) => s.key === sessionKey);
-      
-      if (!sessionExists) {
-        console.warn(`[Dispatch] Session ${sessionKey} not found in OpenClaw. Creating now...`);
-        
-        // Spawn the session since it doesn't exist
-        const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
-        
-        await client.call('sessions.spawn', {
-          task: spawnTask,
-          agentId: agent.id,
-          mode: 'session',
-          label: session!.openclaw_session_id,
-          timeoutSeconds: 0
-        });
-        
-        console.log(`[Dispatch] Session created successfully: ${sessionKey}`);
-      } else {
-        console.log(`[Dispatch] Session validated: ${sessionKey}`);
-      }
-    } catch (validateErr) {
-      console.warn(`[Dispatch] Could not validate/create session:`, validateErr);
-      // Continue anyway - let chat.send fail with clear error if needed
-    }
+    console.log(`[Dispatch] Using session key: ${sessionKey}`);
 
     // Send message to agent's session using chat.send
     try {
