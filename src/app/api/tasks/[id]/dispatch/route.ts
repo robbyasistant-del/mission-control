@@ -214,7 +214,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
       try {
         const prefix = agent.session_key_prefix || 'agent:main:';
-        const sessionKey = `${prefix}${session.openclaw_session_id}`;
+        const sessionKey = `${prefix}${session!.openclaw_session_id}`;
         
         // Check if session exists in OpenClaw
         const existingSessions = await client.call('sessions.list', {}) as { sessions?: Array<{ key: string }> };
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             task: spawnTask,
             agentId: agent.id,
             mode: 'session',
-            label: session.openclaw_session_id,
+            label: session!.openclaw_session_id,
             timeoutSeconds: 0
           });
           
@@ -584,7 +584,7 @@ If you need help or clarification, ask the orchestrator.`;
 
     // Validate session exists before sending message
     const prefix = agent.session_key_prefix || 'agent:main:';
-    const sessionKey = `${prefix}${session.openclaw_session_id}`;
+    const sessionKey = `${prefix}${session!.openclaw_session_id}`;
     
     try {
       // Verify session exists in OpenClaw
@@ -659,7 +659,7 @@ If you need help or clarification, ask the orchestrator.`;
         success: true,
         task_id: task.id,
         agent_id: agent.id,
-        session_id: session.openclaw_session_id,
+        session_id: session!.openclaw_session_id,
         message: 'Task dispatched to agent',
         ...(costCapWarning ? { cost_cap_warning: costCapWarning } : {}),
       });
