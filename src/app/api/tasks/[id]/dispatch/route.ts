@@ -147,40 +147,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         [sessionId]
       );
 
-      // CRITICAL: Spawn the actual OpenClaw session via Gateway
-      console.log(`[Dispatch] Spawning OpenClaw session for agent ${agent.name}...`);
-      try {
-        // Prepare task context for the agent
-        const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
-        
-        // Spawn subagent session
-        await client.call('sessions.spawn', {
-          task: spawnTask,
-          agentId: agent.id,
-          mode: 'session',
-          label: openclawSessionId,
-          timeoutSeconds: 0  // Persistent session
-        });
-        
-        console.log(`[Dispatch] OpenClaw session spawned successfully: ${openclawSessionId}`);
-        
-        // Update session status
-        run(
-          'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
-          ['active', now, sessionId]
-        );
-      } catch (spawnErr) {
-        console.error(`[Dispatch] Failed to spawn OpenClaw session:`, spawnErr);
-        // Mark session as failed but continue - will retry on next dispatch
-        run(
-          'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
-          ['failed', now, sessionId]
-        );
-        return NextResponse.json(
-          { error: `Failed to spawn agent session: ${(spawnErr as Error).message}` },
-          { status: 503 }
-        );
-      }
+      // NOTE: sessions.spawn method does not exist in OpenClaw Gateway
+      // Sessions are created automatically when chat.send is called
+      console.log(`[Dispatch] Session record created for agent ${agent.name}: ${openclawSessionId}`);
+      
+      // Update session status to active (no actual spawn needed)
+      run(
+        'UPDATE openclaw_sessions SET status = ?, updated_at = ? WHERE id = ?',
+        ['active', now, sessionId]
+      );
 
       // Log session creation
       run(
