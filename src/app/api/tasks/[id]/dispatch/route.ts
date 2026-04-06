@@ -582,7 +582,7 @@ If you need help or clarification, ask the orchestrator.`;
     const { formatted: pendingNotes } = getPendingNotesForDispatch(id);
     const finalMessage = pendingNotes ? taskMessage + pendingNotes : taskMessage;
 
-    // Validate session exists before sending message
+    // Ensure session exists in OpenClaw (create if missing)
     const prefix = agent.session_key_prefix || 'agent:main:';
     const sessionKey = `${prefix}${session!.openclaw_session_id}`;
     
@@ -592,16 +592,25 @@ If you need help or clarification, ask the orchestrator.`;
       const sessionExists = sessionList?.sessions?.some((s: { key: string }) => s.key === sessionKey);
       
       if (!sessionExists) {
-        console.error(`[Dispatch] Session ${sessionKey} does not exist in OpenClaw. Cannot dispatch.`);
-        return NextResponse.json(
-          { error: `Agent session not found in OpenClaw. Please retry dispatch.` },
-          { status: 503 }
-        );
+        console.warn(`[Dispatch] Session ${sessionKey} not found in OpenClaw. Creating now...`);
+        
+        // Spawn the session since it doesn't exist
+        const spawnTask = `You are ${agent.name}, a ${agent.role} agent in Mission Control. You have been assigned a task. Wait for the task details to be sent to you.`;
+        
+        await client.call('sessions.spawn', {
+          task: spawnTask,
+          agentId: agent.id,
+          mode: 'session',
+          label: session!.openclaw_session_id,
+          timeoutSeconds: 0
+        });
+        
+        console.log(`[Dispatch] Session created successfully: ${sessionKey}`);
+      } else {
+        console.log(`[Dispatch] Session validated: ${sessionKey}`);
       }
-      
-      console.log(`[Dispatch] Session validated: ${sessionKey}`);
     } catch (validateErr) {
-      console.warn(`[Dispatch] Could not validate session:`, validateErr);
+      console.warn(`[Dispatch] Could not validate/create session:`, validateErr);
       // Continue anyway - let chat.send fail with clear error if needed
     }
 
