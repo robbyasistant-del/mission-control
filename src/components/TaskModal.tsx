@@ -64,6 +64,8 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
   };
 
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [retryStatus, setRetryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [retryMessage, setRetryMessage] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent, keepOpen = false) => {
     e.preventDefault();
@@ -166,6 +168,30 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
       setSaveError(error instanceof Error ? error.message : 'Network error — please try again');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRetryDispatch = async () => {
+    if (!task) return;
+    setRetryStatus('loading');
+    setRetryMessage('');
+
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/dispatch`, { method: 'POST' });
+      const data = await res.json();
+
+      if (res.ok) {
+        setRetryStatus('success');
+        setRetryMessage('Task dispatched successfully');
+        // Reset status after 3 seconds
+        setTimeout(() => setRetryStatus('idle'), 3000);
+      } else {
+        setRetryStatus('error');
+        setRetryMessage(data.error || `Dispatch failed (${res.status})`);
+      }
+    } catch (error) {
+      setRetryStatus('error');
+      setRetryMessage('Network error — please try again');
     }
   };
 
@@ -463,6 +489,34 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRetryDispatch}
+                    disabled={retryStatus === 'loading'}
+                    className={`min-h-11 flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                      retryStatus === 'success'
+                        ? 'bg-green-500/20 text-green-400'
+                        : retryStatus === 'error'
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
+                    } disabled:opacity-50`}
+                    title={retryMessage || 'Retry dispatch to agent'}
+                  >
+                    {retryStatus === 'loading' ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" />
+                        Retrying...
+                      </>
+                    ) : retryStatus === 'success' ? (
+                      <>✓ Dispatched</>
+                    ) : retryStatus === 'error' ? (
+                      <>✗ {retryMessage}</>
+                    ) : (
+                      <>
+                        <span className="text-yellow-400">⟳</span> Retry Dispatch
+                      </>
+                    )}
                   </button>
                 </>
               )}

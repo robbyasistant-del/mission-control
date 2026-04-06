@@ -24,7 +24,7 @@ export interface AutopilotTask {
   agent_name: string | null;
   start_date: string | null;
   end_date: string | null;
-  status: 'pending' | 'in_progress' | 'blocked' | 'testing' | 'done';
+  status: 'pending' | 'dispatched' | 'in_progress' | 'blocked' | 'testing' | 'done';
   title: string;
   description_text: string | null;
   deliverables: string | null;
@@ -50,7 +50,7 @@ export interface CreateTaskInput {
   agent_name?: string;
   start_date?: string;
   end_date?: string;
-  status?: 'pending' | 'in_progress' | 'blocked' | 'testing' | 'done';
+  status?: 'pending' | 'dispatched' | 'in_progress' | 'blocked' | 'testing' | 'done';
   title: string;
   description_text?: string;
   deliverables?: string;

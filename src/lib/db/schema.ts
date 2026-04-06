@@ -759,7 +759,7 @@ CREATE TABLE IF NOT EXISTS autopilot_tasks (
   agent_name TEXT,
   start_date TEXT,
   end_date TEXT,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'blocked', 'testing', 'done')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'dispatched', 'in_progress', 'blocked', 'testing', 'done')),
   title TEXT NOT NULL,
   description_text TEXT,
   deliverables TEXT,

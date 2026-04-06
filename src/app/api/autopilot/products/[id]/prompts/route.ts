@@ -10,6 +10,37 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 
+/**
+ * Find prompt file by key, handling numeric prefixes (e.g., 01-product-program.md)
+ */
+async function findPromptFile(
+  promptsDir: string,
+  promptKey: string
+): Promise<string | null> {
+  // Try exact match first
+  const exactPath = path.join(promptsDir, `${promptKey}.md`);
+  try {
+    await fs.access(exactPath);
+    return exactPath;
+  } catch {
+    // Exact match not found, search for file with prefix
+  }
+  
+  // Search for files matching pattern: *-{promptKey}.md
+  try {
+    const files = await fs.readdir(promptsDir);
+    const pattern = new RegExp(`^\\d+-${promptKey.replace(/-/g, '\\-')}?\\.md$`);
+    const match = files.find(f => pattern.test(f));
+    if (match) {
+      return path.join(promptsDir, match);
+    }
+  } catch {
+    // Directory doesn't exist or can't be read
+  }
+  
+  return null;
+}
+
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
@@ -52,8 +83,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     
     // 1. Save to file
-    const filename = `${prompt_key}.md`;
-    const filepath = path.join(process.cwd(), 'prompts', filename);
+    const promptsDir = path.join(process.cwd(), 'prompts');
+    const filepath = await findPromptFile(promptsDir, prompt_key);
+    
+    if (!filepath) {
+      return NextResponse.json(
+        { error: 'Prompt file not found' },
+        { status: 404 }
+      );
+    }
     
     // Read existing file to preserve header/config
     let existingContent = '';
@@ -108,8 +146,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     
     // Read default from file
-    const filename = `${prompt_key}.md`;
-    const filepath = path.join(process.cwd(), 'prompts', filename);
+    const promptsDir = path.join(process.cwd(), 'prompts');
+    const filepath = await findPromptFile(promptsDir, prompt_key);
+    
+    if (!filepath) {
+      return NextResponse.json(
+        { error: 'Default prompt file not found' },
+        { status: 404 }
+      );
+    }
     
     let defaultPromptText = '';
     try {
@@ -118,8 +163,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       defaultPromptText = match ? match[1].trim() : content;
     } catch {
       return NextResponse.json(
-        { error: 'Default prompt file not found' },
-        { status: 404 }
+        { error: 'Failed to read default prompt file' },
+        { status: 500 }
       );
     }
     

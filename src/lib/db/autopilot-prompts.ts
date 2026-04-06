@@ -273,6 +273,40 @@ export function resetAutopilotPromptToDefault(
 /**
  * Initialize default prompts for a product from files
  */
+/**
+ * Find prompt file by key, handling numeric prefixes (e.g., 01-product-program.md)
+ */
+async function findPromptFile(
+  promptsDir: string,
+  promptKey: string
+): Promise<string | null> {
+  const fs = await import('fs');
+  const path = await import('path');
+  
+  // Try exact match first
+  const exactPath = path.join(promptsDir, `${promptKey}.md`);
+  try {
+    await fs.promises.access(exactPath);
+    return exactPath;
+  } catch {
+    // Exact match not found, search for file with prefix
+  }
+  
+  // Search for files matching pattern: *-{promptKey}.md
+  try {
+    const files = await fs.promises.readdir(promptsDir);
+    const pattern = new RegExp(`^\\d+-${promptKey.replace(/-/g, '\\-')}?\\.md$`);
+    const match = files.find(f => pattern.test(f));
+    if (match) {
+      return path.join(promptsDir, match);
+    }
+  } catch {
+    // Directory doesn't exist or can't be read
+  }
+  
+  return null;
+}
+
 export async function initializeDefaultPromptsForProduct(
   productId: string,
   promptsDir: string = 'prompts'
@@ -280,9 +314,22 @@ export async function initializeDefaultPromptsForProduct(
   const fs = await import('fs');
   const path = await import('path');
   
+  const fullPromptsDir = path.join(process.cwd(), promptsDir);
+  
   for (const promptKey of PROMPT_KEYS) {
-    const filename = `${promptKey}.md`;
-    const filepath = path.join(process.cwd(), promptsDir, filename);
+    const filepath = await findPromptFile(fullPromptsDir, promptKey);
+    
+    if (!filepath) {
+      console.warn(`[Prompts] File not found for ${promptKey}, using defaults`);
+      // Initialize with defaults even if file not found
+      const existing = getAutopilotPrompt(productId, promptKey);
+      if (!existing) {
+        const defaults = DEFAULT_PROMPT_CONFIGS[promptKey];
+        resetAutopilotPromptToDefault(productId, promptKey, '');
+        console.log(`[Prompts] Initialized ${promptKey} with defaults for product ${productId}`);
+      }
+      continue;
+    }
     
     try {
       const content = fs.readFileSync(filepath, 'utf-8');
@@ -297,7 +344,7 @@ export async function initializeDefaultPromptsForProduct(
         console.log(`[Prompts] Initialized ${promptKey} for product ${productId}`);
       }
     } catch (error) {
-      console.error(`[Prompts] Failed to load ${filename}:`, error);
+      console.error(`[Prompts] Failed to load ${filepath}:`, error);
     }
   }
 }

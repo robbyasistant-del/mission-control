@@ -698,6 +698,26 @@ export default function AutopilotProductPage() {
     }
   };
 
+  const handleUpdateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      // Use autopilot-specific endpoint for autopilot tasks
+      const res = await fetch(`/api/autopilot/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update status');
+      }
+      // Reload sprints to reflect the change
+      await loadSprints();
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+      alert(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
   const handleGenerateSprints = async () => {
     if (!product) return;
     setGeneratingSprints(true);
@@ -1397,15 +1417,25 @@ export default function AutopilotProductPage() {
                                         <td className="px-4 py-2 text-mc-text-secondary font-mono text-xs">{task.start_date || '—'}</td>
                                         <td className="px-4 py-2 text-mc-text-secondary font-mono text-xs">{task.end_date || '—'}</td>
                                         <td className="px-4 py-2">
-                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                            task.status === 'done' ? 'bg-green-500/20 text-green-400' :
-                                            task.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
-                                            task.status === 'blocked' ? 'bg-red-500/20 text-red-400' :
-                                            task.status === 'testing' ? 'bg-purple-500/20 text-purple-400' :
-                                            'bg-yellow-500/20 text-yellow-400'
-                                          }`}>
-                                            {task.status}
-                                          </span>
+                                          <select
+                                            value={task.status}
+                                            onChange={(e) => handleUpdateTaskStatus(task.id, e.target.value)}
+                                            className={`text-xs font-medium rounded px-2 py-1 border-0 outline-none cursor-pointer ${
+                                              task.status === 'done' ? 'bg-green-500/20 text-green-400' :
+                                              task.status === 'dispatched' ? 'bg-blue-500/20 text-blue-400' :
+                                              task.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
+                                              task.status === 'blocked' ? 'bg-red-500/20 text-red-400' :
+                                              task.status === 'testing' ? 'bg-purple-500/20 text-purple-400' :
+                                              'bg-yellow-500/20 text-yellow-400'
+                                            }`}
+                                          >
+  <option value="pending">pending</option>
+                                            <option value="dispatched">dispatched</option>
+                                            <option value="in_progress">in_progress</option>
+                                            <option value="blocked">blocked</option>
+                                            <option value="testing">testing</option>
+                                            <option value="done">done</option>
+                                          </select>
                                         </td>
                                       </tr>
                                     ))}

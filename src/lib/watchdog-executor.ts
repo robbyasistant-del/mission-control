@@ -299,7 +299,7 @@ async function createNextTask(context: ExecutionContext): Promise<TaskCreationRe
   if (taskResult.success) {
     // Actualizar BD Autopilot con fecha de inicio
     updateAutopilotTask(nextTask.id, { 
-      status: 'in_progress',
+      status: 'dispatched',
       start_date: new Date().toISOString(),
     });
 
@@ -613,7 +613,7 @@ async function createMissionControlTask(
 
     // 3. Actualizar BD Autopilot
     updateAutopilotTask(autopilotTask.id, { 
-      status: 'in_progress',
+      status: 'dispatched',
       start_date: new Date().toISOString(),
     });
 
