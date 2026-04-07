@@ -134,7 +134,7 @@ export const SwipeIdeaSchema = z.object({
 
 export const CostEventSchema = z.object({
   event_type: CostEventType,
-  amount: z.number().min(0),
+  cost_usd: z.number().min(0),
   description: z.string().max(500).optional(),
   metadata: z.string().optional(),
 });
