@@ -161,14 +161,20 @@ export const CreateCostEventSchema = CostEventSchema;
 // Schedule validation schemas
 export const CreateScheduleSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  schedule_type: z.string().min(1),
   cron_expression: z.string().min(1, 'Cron expression is required'),
-  is_active: z.boolean().optional(),
+  timezone: z.string().optional(),
+  enabled: z.boolean().optional(),
+  config: z.string().optional(),
 });
 
 export const UpdateScheduleSchema = z.object({
   name: z.string().min(1).optional(),
+  schedule_type: z.string().min(1).optional(),
   cron_expression: z.string().min(1).optional(),
-  is_active: z.boolean().optional(),
+  timezone: z.string().optional(),
+  enabled: z.boolean().optional(),
+  config: z.string().optional(),
 });
 
 // Swipe validation schema
