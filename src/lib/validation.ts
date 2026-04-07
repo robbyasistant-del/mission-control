@@ -179,6 +179,7 @@ export const UpdateScheduleSchema = z.object({
 
 // Swipe validation schema
 export const SwipeActionSchema = z.object({
+  idea_id: z.string(),
   action: SwipeAction,
   reason: z.string().max(1000).optional(),
 });
