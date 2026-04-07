@@ -113,7 +113,7 @@ export const UpdateProductSchema = z.object({
 
 export const CreateIdeaSchema = z.object({
   title: z.string().min(1, 'Title is required').max(300),
-  description: z.string().max(5000).optional(),
+  description: z.string().max(5000).optional().default(''),
   category: IdeaCategory,
   complexity: IdeaComplexity.optional(),
 });
