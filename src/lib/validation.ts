@@ -138,3 +138,38 @@ export const CostEventSchema = z.object({
   description: z.string().max(500).optional(),
   metadata: z.string().optional(),
 });
+
+// Cost Caps validation schemas
+export const CreateCostCapSchema = z.object({
+  product_id: z.string(),
+  cap_type: CostCapType,
+  amount: z.number().min(0),
+  period_start: z.string().optional(),
+  period_end: z.string().optional(),
+});
+
+export const UpdateCostCapSchema = z.object({
+  cap_type: CostCapType.optional(),
+  amount: z.number().min(0).optional(),
+  period_start: z.string().optional(),
+  period_end: z.string().optional(),
+});
+
+// Schedule validation schemas
+export const CreateScheduleSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  cron_expression: z.string().min(1, 'Cron expression is required'),
+  is_active: z.boolean().optional(),
+});
+
+export const UpdateScheduleSchema = z.object({
+  name: z.string().min(1).optional(),
+  cron_expression: z.string().min(1).optional(),
+  is_active: z.boolean().optional(),
+});
+
+// Swipe validation schema
+export const SwipeActionSchema = z.object({
+  action: SwipeAction,
+  reason: z.string().max(1000).optional(),
+});
