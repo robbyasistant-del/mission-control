@@ -50,14 +50,23 @@ export async function PATCH(
     const { id } = await params;
     const body: UpdateTaskRequest & { updated_by_agent_id?: string; board_override?: boolean; override_reason?: string } = await request.json();
 
+    // DEBUG LOGS
+    console.log('[DEBUG PATCH] Task ID:', id);
+    console.log('[DEBUG PATCH] Request body:', JSON.stringify(body, null, 2));
+    console.log('[DEBUG PATCH] assigned_agent_id value:', body.assigned_agent_id);
+    console.log('[DEBUG PATCH] assigned_agent_id type:', typeof body.assigned_agent_id);
+
     // Validate input with Zod
     const validation = UpdateTaskSchema.safeParse(body);
+    console.log('[DEBUG PATCH] Validation result:', validation.success ? 'SUCCESS' : 'FAILED');
     if (!validation.success) {
+      console.log('[DEBUG PATCH] Validation errors:', JSON.stringify(validation.error.issues, null, 2));
       return NextResponse.json(
         { error: 'Validation failed', details: validation.error.issues },
         { status: 400 }
       );
     }
+    console.log('[DEBUG PATCH] Validated data:', JSON.stringify(validation.data, null, 2));
 
     const validatedData = validation.data;
     let nextStatus = validatedData.status;
@@ -271,7 +280,11 @@ export async function PATCH(
     values.push(now);
     values.push(id);
 
+    console.log('[DEBUG PATCH] SQL updates:', updates.join(', '));
+    console.log('[DEBUG PATCH] SQL values:', values);
+    
     run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, values);
+    console.log('[DEBUG PATCH] Task updated successfully');
 
     // Fetch updated task with all joined fields
     const task = queryOne<Task>(
@@ -470,8 +483,10 @@ export async function PATCH(
 
     return NextResponse.json(task);
   } catch (error) {
-    console.error('Failed to update task:', error);
-    return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
+    console.error('[DEBUG PATCH] CATCH ERROR:', error);
+    console.error('[DEBUG PATCH] Error message:', (error as Error).message);
+    console.error('[DEBUG PATCH] Error stack:', (error as Error).stack);
+    return NextResponse.json({ error: 'Failed to update task', debug: (error as Error).message }, { status: 500 });
   }
 }
 
