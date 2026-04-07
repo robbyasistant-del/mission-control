@@ -1,13 +1,9 @@
 import { z } from 'zod';
 
 // Agent IDs can be: UUIDs, 32-char hex strings, or gateway-imported identifiers (alphanumeric with underscores/hyphens)
-// Agent ID validator that handles empty strings as null
-const agentId = z.union([
-  z.string()
-    .min(1, 'Agent ID cannot be empty')
-    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{32}$|^[a-z0-9_-]+$/i, 'Must be a valid agent ID (UUID, hex, or identifier with underscores/hyphens)'),
-  z.literal('').transform(() => null),
-]);
+const agentId = z.string()
+  .min(1, 'Agent ID cannot be empty')
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{32}$|^[a-z0-9_-]+$/i, 'Must be a valid agent ID (UUID, hex, or identifier with underscores/hyphens)');
 
 // Task status and priority enums from types
 const TaskStatus = z.enum([
@@ -42,8 +38,14 @@ export const CreateTaskSchema = z.object({
   description: z.string().max(10000, 'Description must be 10000 characters or less').optional(),
   status: TaskStatus.optional(),
   priority: TaskPriority.optional(),
-  assigned_agent_id: z.union([agentId, z.null()]).optional(),
-  created_by_agent_id: z.union([agentId, z.null()]).optional(),
+  assigned_agent_id: z.preprocess(
+    (val) => (val === '' ? null : val),
+    z.union([agentId, z.null()]).optional()
+  ),
+  created_by_agent_id: z.preprocess(
+    (val) => (val === '' ? null : val),
+    z.union([agentId, z.null()]).optional()
+  ),
   business_id: z.string().optional(),
   workspace_id: z.string().optional(),
   due_date: z.string().optional().nullable(),
@@ -54,10 +56,16 @@ export const UpdateTaskSchema = z.object({
   description: z.string().max(10000).optional(),
   status: TaskStatus.optional(),
   priority: TaskPriority.optional(),
-  assigned_agent_id: z.union([agentId, z.null()]).optional(),
+  assigned_agent_id: z.preprocess(
+    (val) => (val === '' ? null : val),
+    z.union([agentId, z.null()]).optional()
+  ),
   workflow_template_id: z.string().optional().nullable(),
   due_date: z.string().optional().nullable(),
-  updated_by_agent_id: z.union([agentId, z.null()]).optional(),
+  updated_by_agent_id: z.preprocess(
+    (val) => (val === '' ? null : val),
+    z.union([agentId, z.null()]).optional()
+  ),
   status_reason: z.string().max(2000).optional(),
   board_override: z.boolean().optional(),
   override_reason: z.string().max(2000).optional(),
@@ -69,7 +77,10 @@ export const UpdateTaskSchema = z.object({
 export const CreateActivitySchema = z.object({
   activity_type: ActivityType,
   message: z.string().min(1, 'Message is required').max(5000, 'Message must be 5000 characters or less'),
-  agent_id: z.union([agentId, z.null()]).optional(),
+  agent_id: z.preprocess(
+    (val) => (val === '' ? null : val),
+    z.union([agentId, z.null()]).optional()
+  ),
   metadata: z.string().optional(),
 });
 
