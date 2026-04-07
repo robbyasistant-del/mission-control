@@ -64,6 +64,7 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
   };
 
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [retryStatus, setRetryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [retryMessage, setRetryMessage] = useState<string>('');
 
@@ -73,6 +74,7 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
     setSaveError(null);
 
     try {
+      setSaveSuccess(null);
       const url = task ? `/api/tasks/${task.id}` : '/api/tasks';
       const method = task ? 'PATCH' : 'POST';
       const resolvedStatus = resolveStatus();
@@ -161,7 +163,10 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
         });
         setUsePlanningMode(false);
       } else {
-        onClose();
+        // Show success message, stay open
+        setSaveSuccess('Task saved successfully!');
+        // Auto-hide success message after 3 seconds
+        setTimeout(() => setSaveSuccess(null), 3000);
       }
     } catch (error) {
       console.error('Failed to save task:', error);
@@ -417,6 +422,11 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
           {saveError && (
             <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-md">
               <span className="text-sm text-red-400">{saveError}</span>
+            </div>
+          )}
+          {saveSuccess && (
+            <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-md">
+              <span className="text-sm text-green-400">{saveSuccess}</span>
             </div>
           )}
             </form>
