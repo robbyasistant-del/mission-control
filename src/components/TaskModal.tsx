@@ -117,7 +117,9 @@ export function TaskModal({ task, onClose, workspaceId }: TaskModalProps) {
           }).catch((err) => console.error('Auto-dispatch failed:', err));
         }
 
-        onClose();
+        // Show success message, stay open
+        setSaveSuccess('Task saved successfully!');
+        setTimeout(() => setSaveSuccess(null), 3000);
         return;
       }
 
