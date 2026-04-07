@@ -143,17 +143,20 @@ export const CostEventSchema = z.object({
 export const CreateCostCapSchema = z.object({
   product_id: z.string(),
   cap_type: CostCapType,
-  amount: z.number().min(0),
+  limit_usd: z.number().min(0),
   period_start: z.string().optional(),
   period_end: z.string().optional(),
 });
 
 export const UpdateCostCapSchema = z.object({
   cap_type: CostCapType.optional(),
-  amount: z.number().min(0).optional(),
+  limit_usd: z.number().min(0).optional(),
   period_start: z.string().optional(),
   period_end: z.string().optional(),
 });
+
+// Cost Event validation schema (alias for compatibility)
+export const CreateCostEventSchema = CostEventSchema;
 
 // Schedule validation schemas
 export const CreateScheduleSchema = z.object({
